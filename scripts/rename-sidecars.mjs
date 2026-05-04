@@ -159,6 +159,28 @@ async function fetchTriple (triple) {
   }
 }
 
+/**
+ * Tauri 2 with `--target universal-apple-darwin` looks for sidecars named
+ * `ffmpeg-universal-apple-darwin` (it does NOT lipo per-arch binaries
+ * automatically). After fetching both macOS arches we merge them with `lipo`.
+ */
+function makeUniversalMacBinaries () {
+  if (process.platform !== 'darwin') return
+  for (const tool of ['ffmpeg', 'ffprobe']) {
+    const arm = join(BIN_DIR, `${tool}-aarch64-apple-darwin`)
+    const x64 = join(BIN_DIR, `${tool}-x86_64-apple-darwin`)
+    const out = join(BIN_DIR, `${tool}-universal-apple-darwin`)
+    if (!existsSync(arm) || !existsSync(x64)) continue
+    if (existsSync(out)) {
+      try { verifyBinary(out); continue } catch { /* refresh */ }
+    }
+    const r = spawnSync('lipo', ['-create', arm, x64, '-output', out], { stdio: 'inherit' })
+    if (r.status !== 0) throw new Error(`lipo failed for ${tool} (exit ${r.status})`)
+    chmodSync(out, 0o755)
+    verifyBinary(out)
+  }
+}
+
 async function main () {
   mkdirSync(BIN_DIR, { recursive: true })
 
@@ -177,6 +199,13 @@ async function main () {
   console.log(`[fetch-ffmpeg] target triples: ${triples.join(', ')}`)
   for (const triple of triples) {
     await fetchTriple(triple)
+  }
+
+  // On macOS, also produce a universal lipo binary so Tauri's
+  // `--target universal-apple-darwin` build picks it up.
+  if (allTargets && process.platform === 'darwin') {
+    makeUniversalMacBinaries()
+    triples.push('universal-apple-darwin')
   }
 
   writeFileSync(join(BIN_DIR, '.fetched'), JSON.stringify({ at: new Date().toISOString(), triples }, null, 2))
