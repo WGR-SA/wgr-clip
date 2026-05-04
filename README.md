@@ -1,4 +1,8 @@
-# wgr-clip
+<p align="center">
+  <img src="src-tauri/icons/icon-1024.png" width="180" alt="wgr-clip" />
+</p>
+
+<h1 align="center">wgr-clip</h1>
 
 Drag-drop converter for **video, image and audio** files — pour les clients qui ne devraient pas avoir à savoir ce qu'est un codec.
 
