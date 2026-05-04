@@ -33,25 +33,27 @@ if (process.env.CI && process.env.WGR_CLIP_FETCH_FFMPEG !== '1' && process.env.n
   process.exit(0)
 }
 
+// All sources are now static prebuilt binaries from the @ffmpeg-installer /
+// @ffprobe-installer npm packages. They link only against system frameworks,
+// so they Just Work in a bundled, unsigned mac/win app — no /opt/homebrew
+// dylib references that would dangle on a fresh client machine.
 const SOURCES = {
-  // ARM64 macOS: copy from Homebrew (preinstalled on GH macos-14 runners and
-  // most dev macs). evermeet.cx serves x86_64 only, so brew is the simplest
-  // path to a real arm64-native binary.
   'aarch64-apple-darwin': {
-    kind: 'brew',
+    kind: 'npm',
+    ffmpegPkg: '@ffmpeg-installer/darwin-arm64',
+    ffprobePkg: '@ffprobe-installer/darwin-arm64',
     ext: ''
   },
-  // Intel macOS: evermeet.cx ships a static x86_64 binary.
   'x86_64-apple-darwin': {
-    kind: 'http',
-    ffmpeg: 'https://evermeet.cx/ffmpeg/getrelease/zip',
-    ffprobe: 'https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip',
+    kind: 'npm',
+    ffmpegPkg: '@ffmpeg-installer/darwin-x64',
+    ffprobePkg: '@ffprobe-installer/darwin-x64',
     ext: ''
   },
   'x86_64-pc-windows-msvc': {
-    kind: 'http',
-    ffmpeg: 'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip',
-    ffprobe: null, // BtbN archive includes both binaries
+    kind: 'npm',
+    ffmpegPkg: '@ffmpeg-installer/win32-x64',
+    ffprobePkg: '@ffprobe-installer/win32-x64',
     ext: '.exe'
   }
 }
@@ -100,30 +102,38 @@ function verifyBinary (path) {
   console.log(`[fetch-ffmpeg]   ✓ ${(r.stdout || '').split('\n')[0]}`)
 }
 
-function ensureBrewFfmpeg (prefix) {
-  const ffmpeg = `${prefix}/bin/ffmpeg`
-  const ffprobe = `${prefix}/bin/ffprobe`
-  if (existsSync(ffmpeg) && existsSync(ffprobe)) return
-  console.log('[fetch-ffmpeg] ffmpeg not found in Homebrew — running `brew install ffmpeg` (this can take a few minutes)')
-  const r = spawnSync('brew', ['install', 'ffmpeg'], { stdio: 'inherit' })
-  if (r.status !== 0) {
-    throw new Error(`brew install ffmpeg failed (exit ${r.status}). Install manually: brew install ffmpeg`)
-  }
-}
-
-function copyBrewBinaries (triple, ext) {
-  // Detect the Homebrew prefix (arm64 → /opt/homebrew, x86_64 → /usr/local).
-  const prefix = process.arch === 'arm64' ? '/opt/homebrew' : '/usr/local'
-  ensureBrewFfmpeg(prefix)
-  for (const tool of ['ffmpeg', 'ffprobe']) {
-    const src = `${prefix}/bin/${tool}`
-    if (!existsSync(src)) {
-      throw new Error(`${tool} not found at ${src} after \`brew install ffmpeg\``)
+function copyNpmBinaries (triple, ext, ffmpegPkg, ffprobePkg) {
+  // Locate `<pkg>/<tool>(.exe)` inside node_modules. Each @ffmpeg-installer
+  // / @ffprobe-installer subpackage ships a single statically-linked binary
+  // matching the package's platform.
+  const pairs = [
+    { tool: 'ffmpeg', pkg: ffmpegPkg },
+    { tool: 'ffprobe', pkg: ffprobePkg }
+  ]
+  for (const { tool, pkg } of pairs) {
+    const candidates = [
+      join(ROOT, 'node_modules', pkg, `${tool}${ext}`),
+      join(ROOT, 'node_modules', pkg, tool)
+    ]
+    const src = candidates.find(p => existsSync(p))
+    if (!src) {
+      throw new Error(`${tool} not found in node_modules/${pkg}. Did \`npm install\` run?`)
     }
     const dest = join(BIN_DIR, `${tool}-${triple}${ext}`)
     copyFileSync(src, dest)
     chmodSync(dest, 0o755)
-    verifyBinary(dest)
+    // Skip verifyBinary on cross-platform sidecars (e.g. fetching the
+    // Windows binary from a macOS host). Only run -version when the binary
+    // matches the host arch/OS.
+    const isHost = (
+      (process.platform === 'darwin' && triple.endsWith('-apple-darwin') && (
+        (process.arch === 'arm64' && triple.startsWith('aarch64')) ||
+        (process.arch === 'x64' && triple.startsWith('x86_64'))
+      )) ||
+      (process.platform === 'win32' && triple === 'x86_64-pc-windows-msvc')
+    )
+    if (isHost) verifyBinary(dest)
+    else console.log(`[fetch-ffmpeg]   ✓ copied ${pkg}/${tool}${ext} (cross-platform, no verify)`)
   }
 }
 
@@ -146,9 +156,9 @@ async function fetchTriple (triple) {
     for (const p of expected) rmSync(p, { force: true })
   }
 
-  if (src.kind === 'brew') {
-    console.log(`[fetch-ffmpeg] ${triple}: copying from Homebrew`)
-    copyBrewBinaries(triple, ext)
+  if (src.kind === 'npm') {
+    console.log(`[fetch-ffmpeg] ${triple}: copying from ${src.ffmpegPkg} + ${src.ffprobePkg}`)
+    copyNpmBinaries(triple, ext, src.ffmpegPkg, src.ffprobePkg)
     return
   }
 
