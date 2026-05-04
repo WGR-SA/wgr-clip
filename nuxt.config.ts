@@ -11,9 +11,9 @@ export default defineNuxtConfig({
   },
 
   app: {
-    // Relative baseURL is required for Tauri's `tauri://` asset resolution
-    // in production. In dev (HTTP) it's harmless.
-    baseURL: './',
+    // Tauri 2 webview serves assets from `tauri://localhost/` so an absolute
+    // baseURL works. (Earlier we used './', but that caused `nuxt generate`
+    // to emit redirect stubs instead of real HTML files.)
     head: {
       title: 'wgr-clip',
       meta: [
@@ -23,6 +23,18 @@ export default defineNuxtConfig({
   },
 
   css: ['~/assets/css/fonts.css', '~/assets/css/main.css'],
+
+  // Force a real static SPA output for `nuxt generate`. Without this Nuxt 4
+  // emits "Redirecting..." stubs instead of index.html and the bundled
+  // Tauri webview can't find the page. (Don't set this in dev — combining
+  // ssr:false + nitro.preset:static breaks Nuxt 4's vite-node IPC.)
+  nitro: {
+    preset: 'static'
+  },
+
+  routeRules: {
+    '/': { prerender: true }
+  },
 
   vite: {
     clearScreen: false
