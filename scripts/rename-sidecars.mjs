@@ -16,7 +16,7 @@
  */
 
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, chmodSync, writeFileSync, statSync, createWriteStream } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, copyFileSync, rmSync, chmodSync, writeFileSync, statSync, createWriteStream } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { tmpdir } from 'node:os'
@@ -127,7 +127,10 @@ async function fetchTriple (triple) {
       if (!found) throw new Error(`${tool} not found inside archive`)
       const dest = join(BIN_DIR, `${tool}-${triple}${ext}`)
       chmodSync(found, 0o755)
-      renameSync(found, dest)
+      // copy+unlink instead of rename — GH Windows runners place temp on C:
+      // and the workspace on D:, which makes rename throw EXDEV.
+      copyFileSync(found, dest)
+      rmSync(found, { force: true })
       chmodSync(dest, 0o755)
       verifyBinary(dest)
     }
@@ -148,7 +151,8 @@ async function fetchTriple (triple) {
     if (!found) throw new Error(`${tool} not found inside ${url}`)
     const dest = join(BIN_DIR, `${tool}-${triple}${ext}`)
     chmodSync(found, 0o755)
-    renameSync(found, dest)
+    copyFileSync(found, dest)
+    rmSync(found, { force: true })
     chmodSync(dest, 0o755)
     verifyBinary(dest)
     rmSync(work, { recursive: true, force: true })
