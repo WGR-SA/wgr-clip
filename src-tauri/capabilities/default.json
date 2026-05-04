@@ -7,6 +7,10 @@
     "core:default",
     "core:event:default",
     "core:window:default",
+    "core:window:allow-set-size",
+    "core:window:allow-inner-size",
+    "core:window:allow-outer-size",
+    "core:window:allow-scale-factor",
     "core:webview:default",
     "core:webview:allow-internal-toggle-devtools",
     "dialog:default",
@@ -17,9 +21,18 @@
     "clipboard-manager:allow-write-text",
     "opener:default",
     "opener:allow-reveal-item-in-dir",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://wgr.ch" },
+        { "url": "https://wgr.ch/*" }
+      ]
+    },
     "process:default",
     "process:allow-restart",
     "updater:default",
+    "notification:default",
+    "store:default",
     "shell:default",
     {
       "identifier": "shell:allow-execute",

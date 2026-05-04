@@ -11,13 +11,13 @@ const hasFinished = computed(() =>
   <section class="joblist">
     <header class="joblist__head">
       <h3 class="joblist__title">
-        Queue
+        File d'attente
       </h3>
       <div class="joblist__counts">
-        <span><strong>{{ queue.counts.value.done }}</strong> done</span>
-        <span v-if="queue.counts.value.active > 0">·  <strong>{{ queue.counts.value.active }}</strong> encoding</span>
-        <span v-if="queue.counts.value.pending > 0">·  <strong>{{ queue.counts.value.pending }}</strong> queued</span>
-        <span v-if="queue.counts.value.error > 0">·  <strong style="color:#ef4444">{{ queue.counts.value.error }}</strong> error</span>
+        <span><strong>{{ queue.counts.value.done }}</strong> terminés</span>
+        <span v-if="queue.counts.value.active > 0">·  <strong>{{ queue.counts.value.active }}</strong> en cours</span>
+        <span v-if="queue.counts.value.pending > 0">·  <strong>{{ queue.counts.value.pending }}</strong> en attente</span>
+        <span v-if="queue.counts.value.error > 0">·  <strong style="color:#ef4444">{{ queue.counts.value.error }}</strong> erreur(s)</span>
       </div>
       <UButton
         v-if="hasFinished"
@@ -27,7 +27,7 @@ const hasFinished = computed(() =>
         icon="i-lucide-eraser"
         @click="queue.clearFinished()"
       >
-        Clear finished
+        Effacer les terminés
       </UButton>
     </header>
 
@@ -45,7 +45,7 @@ const hasFinished = computed(() =>
       v-else
       class="joblist__empty"
     >
-      No jobs yet. Drop a video to get started.
+      Aucun fichier pour le moment. Déposez une vidéo pour commencer.
     </div>
   </section>
 </template>
@@ -65,11 +65,10 @@ const hasFinished = computed(() =>
 
 .joblist__title {
   font-family: var(--font-display);
-  font-size: 1rem;
+  font-size: 1.15rem;
   font-weight: 800;
   margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: -0.01em;
 }
 
 .joblist__counts {

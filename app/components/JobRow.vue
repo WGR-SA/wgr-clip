@@ -7,12 +7,12 @@ const queue = useTranscodeQueue()
 
 const statusLabel = computed(() => {
   switch (props.job.status.state) {
-    case 'pending': return 'Queued'
-    case 'probing': return 'Probing'
-    case 'encoding': return 'Encoding'
-    case 'done': return 'Done'
-    case 'error': return 'Error'
-    case 'cancelled': return 'Cancelled'
+    case 'pending': return 'En attente'
+    case 'probing': return 'Analyse'
+    case 'encoding': return props.job.kind === 'image' ? 'Compression' : 'Conversion'
+    case 'done': return 'Terminé'
+    case 'error': return 'Erreur'
+    case 'cancelled': return 'Annulé'
     default: return props.job.status.state
   }
 })
@@ -29,11 +29,24 @@ const statusColor = computed(() => {
   }
 })
 
+const kindIcon = computed(() => {
+  switch (props.job.kind) {
+    case 'image': return 'i-lucide-image'
+    case 'audio': return 'i-lucide-music'
+    case 'video':
+    default:
+      return 'i-lucide-film'
+  }
+})
+
 const isActive = computed(() => props.job.status.state === 'encoding' || props.job.status.state === 'probing')
 const isFinal = computed(() => ['done', 'error', 'cancelled'].includes(props.job.status.state))
 const showError = computed(() => props.job.status.state === 'error' && !!props.job.error)
 
 const percentText = computed(() => formatPercent(props.job.progress))
+const showEta = computed(() => isActive.value && props.job.kind !== 'image' && props.job.eta_s > 0)
+const showSpeed = computed(() => isActive.value && props.job.kind !== 'image')
+const showFps = computed(() => isActive.value && props.job.kind === 'video' && props.job.fps > 0)
 
 async function cancel () { await queue.cancel(props.job.id) }
 async function revealOutput () { await queue.revealInFolder(props.job.output) }
@@ -41,20 +54,20 @@ async function revealOutput () { await queue.revealInFolder(props.job.output) }
 
 <template>
   <li class="jobrow">
-    <div class="jobrow__main">
-      <div class="jobrow__head">
-        <div class="jobrow__file">
-          <UIcon
-            name="i-lucide-film"
-            class="jobrow__file-icon"
-          />
-          <div
-            class="jobrow__name"
-            :title="job.input"
-          >
-            {{ basename(job.input) }}
-          </div>
+    <div class="jobrow__head">
+      <div class="jobrow__file">
+        <UIcon
+          :name="kindIcon"
+          class="jobrow__file-icon"
+        />
+        <div
+          class="jobrow__name"
+          :title="job.input"
+        >
+          {{ basename(job.input) }}
         </div>
+      </div>
+      <div class="jobrow__status">
         <UBadge
           :color="statusColor"
           variant="subtle"
@@ -62,43 +75,40 @@ async function revealOutput () { await queue.revealInFolder(props.job.output) }
         >
           {{ statusLabel }}
         </UBadge>
-      </div>
-
-      <div class="jobrow__bar">
-        <div
-          class="jobrow__bar-fill"
-          :class="{ 'jobrow__bar-fill--done': job.status.state === 'done', 'jobrow__bar-fill--error': job.status.state === 'error' }"
-          :style="{ width: `${Math.max(0, Math.min(1, job.progress)) * 100}%` }"
+        <UButton
+          v-if="!isFinal"
+          size="xs"
+          color="neutral"
+          variant="ghost"
+          icon="i-lucide-x"
+          aria-label="Annuler"
+          @click="cancel"
         />
-      </div>
-
-      <div class="jobrow__meta">
-        <span>{{ percentText }}</span>
-        <span v-if="isActive">·  {{ formatSpeed(job.speed_x) }}</span>
-        <span v-if="isActive && job.eta_s > 0">·  ETA {{ formatDuration(job.eta_s) }}</span>
-        <span v-if="isActive && job.fps > 0">·  {{ Math.round(job.fps) }} fps</span>
+        <UButton
+          v-if="job.status.state === 'done'"
+          size="xs"
+          color="neutral"
+          variant="ghost"
+          icon="i-lucide-folder-output"
+          aria-label="Ouvrir le dossier"
+          @click="revealOutput"
+        />
       </div>
     </div>
 
-    <div class="jobrow__actions">
-      <UButton
-        v-if="!isFinal"
-        size="xs"
-        color="neutral"
-        variant="ghost"
-        icon="i-lucide-x"
-        aria-label="Cancel"
-        @click="cancel"
+    <div class="jobrow__bar">
+      <div
+        class="jobrow__bar-fill"
+        :class="{ 'jobrow__bar-fill--done': job.status.state === 'done', 'jobrow__bar-fill--error': job.status.state === 'error' }"
+        :style="{ width: `${Math.max(0, Math.min(1, job.progress)) * 100}%` }"
       />
-      <UButton
-        v-if="job.status.state === 'done'"
-        size="xs"
-        color="neutral"
-        variant="ghost"
-        icon="i-lucide-folder-output"
-        aria-label="Reveal in folder"
-        @click="revealOutput"
-      />
+    </div>
+
+    <div class="jobrow__meta">
+      <span>{{ percentText }}</span>
+      <span v-if="showSpeed">·  {{ formatSpeed(job.speed_x) }}</span>
+      <span v-if="showEta">·  reste {{ formatDuration(job.eta_s) }}</span>
+      <span v-if="showFps">·  {{ Math.round(job.fps) }} ips</span>
     </div>
 
     <JobErrorPanel
@@ -113,17 +123,11 @@ async function revealOutput () { await queue.revealInFolder(props.job.output) }
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 0.45rem;
   padding: 0.85rem 1rem;
   background: #1c1c1c;
   border: 1px solid #2a2a2a;
   border-radius: 12px;
-}
-
-.jobrow__main {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
 }
 
 .jobrow__head {
@@ -138,6 +142,7 @@ async function revealOutput () { await queue.revealInFolder(props.job.output) }
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
+  flex: 1;
 }
 
 .jobrow__file-icon {
@@ -152,7 +157,14 @@ async function revealOutput () { await queue.revealInFolder(props.job.output) }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
+  min-width: 0;
+}
+
+.jobrow__status {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
 }
 
 .jobrow__bar {
@@ -184,21 +196,5 @@ async function revealOutput () { await queue.revealInFolder(props.job.output) }
   display: flex;
   gap: 0.4rem;
   flex-wrap: wrap;
-}
-
-.jobrow__actions {
-  position: absolute;
-  /* placeholder — actions render inline within head via overlap is too clever; keep absolute off and inline only */
-}
-
-/* Keep cancel inline next to badge by floating in head row instead */
-.jobrow__actions {
-  position: static;
-  display: flex;
-  gap: 0.25rem;
-  margin-top: -28px;
-  margin-left: auto;
-  width: max-content;
-  align-self: flex-end;
 }
 </style>

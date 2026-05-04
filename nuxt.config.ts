@@ -2,13 +2,17 @@
 export default defineNuxtConfig({
   modules: ['@nuxt/eslint', '@nuxt/ui'],
 
-  ssr: false,
+  // SSR is left enabled (Nuxt 4 dev's vite-node IPC misbehaves with ssr:false).
+  // For Tauri we run `nuxt generate`, which prerenders every route to static
+  // HTML — the bundled webview gets the same SPA result either way.
 
   devtools: {
     enabled: false
   },
 
   app: {
+    // Relative baseURL is required for Tauri's `tauri://` asset resolution
+    // in production. In dev (HTTP) it's harmless.
     baseURL: './',
     head: {
       title: 'wgr-clip',
@@ -20,19 +24,8 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/fonts.css', '~/assets/css/main.css'],
 
-  nitro: {
-    preset: 'static'
-  },
-
   vite: {
-    clearScreen: false,
-    server: {
-      strictPort: true,
-      hmr: {
-        protocol: 'ws',
-        host: 'localhost'
-      }
-    }
+    clearScreen: false
   },
 
   compatibilityDate: '2025-01-15',

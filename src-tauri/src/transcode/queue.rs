@@ -1,4 +1,4 @@
-use super::{encoder, Job, JobStatus, Preset};
+use super::{encoder, CustomParams, Job, JobStatus, MediaKind, Preset};
 use crate::hw_accel::HwAccel;
 use dashmap::DashMap;
 use std::path::PathBuf;
@@ -39,8 +39,14 @@ impl JobQueue {
                 cancels_w.insert(id, cancel.clone());
 
                 // Snapshot job inputs before mutating
-                let (input, output, preset) = match jobs_w.get(&id) {
-                    Some(j) => (j.input.clone(), j.output.clone(), j.preset),
+                let (input, output, preset, kind, custom) = match jobs_w.get(&id) {
+                    Some(j) => (
+                        j.input.clone(),
+                        j.output.clone(),
+                        j.preset,
+                        j.kind,
+                        j.custom,
+                    ),
                     None => {
                         drop(permit);
                         cancels_w.remove(&id);
@@ -53,9 +59,18 @@ impl JobQueue {
                 }
 
                 let hw = *hw_accel.read();
-                let result =
-                    encoder::run_job(app_w.clone(), id, &input, &output, preset, hw, cancel.clone())
-                        .await;
+                let result = encoder::run_job(
+                    app_w.clone(),
+                    id,
+                    &input,
+                    &output,
+                    preset,
+                    kind,
+                    custom,
+                    hw,
+                    cancel.clone(),
+                )
+                .await;
 
                 if let Some(mut j) = jobs_w.get_mut(&id) {
                     match &result {
@@ -88,8 +103,15 @@ impl JobQueue {
         }
     }
 
-    pub fn enqueue(&self, input: PathBuf, output: PathBuf, preset: Preset) -> Uuid {
-        let job = Job::new(input, output, preset);
+    pub fn enqueue(
+        &self,
+        input: PathBuf,
+        output: PathBuf,
+        preset: Preset,
+        kind: MediaKind,
+        custom: Option<CustomParams>,
+    ) -> Uuid {
+        let job = Job::new(input, output, preset, kind, custom);
         let id = job.id;
         self.jobs.insert(id, job);
         let _ = self.tx.send(id);

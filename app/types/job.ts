@@ -1,4 +1,18 @@
-export type Preset = 'web1080p' | '4k' | 'source'
+export type Preset = 'web1080p' | '4k' | 'source' | 'custom'
+
+export type MediaKind = 'video' | 'image' | 'audio'
+
+export interface CustomParams {
+  // Video
+  video_max_height: number   // 0 = no clamp
+  video_crf: number          // 15..32, lower = better
+  video_audio_kbps: number   // AAC bitrate for video's audio track
+  // Image
+  image_max_dim: number      // 0 = no resize
+  image_quality: number      // 1..100, higher = better
+  // Audio
+  audio_kbps: number         // 32..320
+}
 
 export type JobStatusState =
   | 'pending'
@@ -25,6 +39,8 @@ export interface Job {
   input: string
   output: string
   preset: Preset
+  kind: MediaKind
+  custom: CustomParams | null
   status: { state: JobStatusState }
   progress: number
   speed_x: number

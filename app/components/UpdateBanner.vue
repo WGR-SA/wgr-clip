@@ -7,7 +7,7 @@ const installing = ref(false)
 const dismissed = ref(false)
 const error = ref<string | null>(null)
 
-onMounted(async () => {
+onMounted(() => {
   // Auto check 5s after boot to avoid blocking initial paint
   setTimeout(async () => {
     try {
@@ -44,7 +44,7 @@ async function install () {
       class="updbanner__icon"
     />
     <div class="updbanner__msg">
-      Update available — <strong>v{{ update.version }}</strong>
+      Mise à jour disponible — <strong>v{{ update.version }}</strong>
       <span
         v-if="error"
         class="updbanner__err"
@@ -57,14 +57,14 @@ async function install () {
       :loading="installing"
       @click="install"
     >
-      {{ installing ? 'Installing…' : 'Install & restart' }}
+      {{ installing ? 'Installation…' : 'Installer et redémarrer' }}
     </UButton>
     <UButton
       size="xs"
       color="neutral"
       variant="ghost"
       icon="i-lucide-x"
-      aria-label="Dismiss"
+      aria-label="Ignorer"
       @click="dismissed = true"
     />
   </div>

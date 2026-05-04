@@ -91,16 +91,20 @@ pub async fn probe(app: &AppHandle, input: &Path) -> Result<ProbeResult, JobErro
     let video = json
         .streams
         .iter()
-        .find(|s| s.codec_type.as_deref() == Some("video"))
-        .ok_or_else(|| JobError::UnsupportedCodec("no video stream".into()))?;
-
-    let duration_us = parse_duration_us(&json).unwrap_or(0);
+        .find(|s| s.codec_type.as_deref() == Some("video"));
     let has_audio = json
         .streams
         .iter()
         .any(|s| s.codec_type.as_deref() == Some("audio"));
-    let width = video.width.unwrap_or(0);
-    let height = video.height.unwrap_or(0);
+
+    if video.is_none() && !has_audio {
+        return Err(JobError::UnsupportedCodec("no media streams found".into()));
+    }
+
+    let duration_us = parse_duration_us(&json).unwrap_or(0);
+    let (width, height) = video
+        .map(|v| (v.width.unwrap_or(0), v.height.unwrap_or(0)))
+        .unwrap_or((0, 0));
 
     Ok(ProbeResult {
         duration_us,

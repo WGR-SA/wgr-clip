@@ -1,109 +1,140 @@
 <script setup lang="ts">
-import type { Preset } from '~/types/job'
+import type { MediaKind, Preset } from '~/types/job'
+
+const props = defineProps<{ kind: MediaKind }>()
 
 const queue = useTranscodeQueue()
 
-const presets: Array<{ value: Preset, label: string, hint: string, icon: string }> = [
-  { value: 'web1080p', label: 'Web 1080p', hint: 'H.264, CRF 22, AAC 128k — universal web upload', icon: 'i-lucide-monitor' },
-  { value: '4k', label: '4K 2160p', hint: 'H.264, CRF 20, AAC 192k — high fidelity', icon: 'i-lucide-tv' },
-  { value: 'source', label: 'Source', hint: 'Keep original resolution, web container', icon: 'i-lucide-file-video' }
-]
+interface PresetOption {
+  value: Preset
+  label: string
+  hint: string
+}
 
-const current = computed(() => queue.preset.value)
-const choose = (p: Preset) => queue.setPreset(p)
+const itemsByKind: Record<MediaKind, PresetOption[]> = {
+  video: [
+    { value: 'source', label: 'Original', hint: 'Garde la résolution d\'origine' },
+    { value: 'web1080p', label: 'Web 1080p', hint: 'Cap 1920×1080, ~5 Mb/s' },
+    { value: '4k', label: '4K 2160p', hint: 'Cap 3840×2160, ~25 Mb/s' },
+    { value: 'custom', label: 'Personnalisé…', hint: 'Définir résolution / qualité' }
+  ],
+  image: [
+    { value: 'source', label: 'Original', hint: 'Garde les dimensions, recompresse JPEG q92' },
+    { value: 'web1080p', label: 'Web 2000px', hint: 'Cap 2000px, JPEG q85' },
+    { value: '4k', label: 'HD 4000px', hint: 'Cap 4000px, JPEG q90' },
+    { value: 'custom', label: 'Personnalisé…', hint: 'Définir taille / qualité' }
+  ],
+  audio: [
+    { value: 'source', label: 'Standard 192k', hint: 'MP3 192k — qualité standard' },
+    { value: 'web1080p', label: 'Web 128k', hint: 'MP3 128k — compact pour upload' },
+    { value: '4k', label: 'HQ 256k', hint: 'MP3 256k — haute qualité' },
+    { value: 'custom', label: 'Personnalisé…', hint: 'Définir le bitrate MP3' }
+  ]
+}
+
+const items = computed(() => itemsByKind[props.kind])
+
+const kindMeta: Record<MediaKind, { caption: string, icon: string }> = {
+  video: { caption: 'Vidéo', icon: 'i-lucide-film' },
+  image: { caption: 'Image', icon: 'i-lucide-image' },
+  audio: { caption: 'Audio', icon: 'i-lucide-music' }
+}
+
+const currentValue = computed<Preset>(() => {
+  if (props.kind === 'video') return queue.videoPreset.value
+  if (props.kind === 'image') return queue.imagePreset.value
+  return queue.audioPreset.value
+})
+
+const selected = computed<PresetOption>({
+  get: () => items.value.find(i => i.value === currentValue.value) ?? items.value[0]!,
+  set: (v) => queue.setPreset(props.kind, v.value)
+})
+
+const meta = computed(() => kindMeta[props.kind])
 </script>
 
 <template>
-  <fieldset class="preset">
-    <legend class="preset__legend">
-      Preset
-    </legend>
-    <div class="preset__grid">
-      <button
-        v-for="p in presets"
-        :key="p.value"
-        type="button"
-        class="preset__card"
-        :class="{ 'preset__card--active': current === p.value }"
-        @click="choose(p.value)"
-      >
+  <USelectMenu
+    v-model="selected"
+    :items="items"
+    :search-input="false"
+    class="preset"
+    :ui="{ base: 'preset__trigger' }"
+  >
+    <template #default="{ modelValue }">
+      <span class="preset__value">
         <UIcon
-          :name="p.icon"
+          :name="meta.icon"
           class="preset__icon"
         />
-        <div class="preset__label">
-          {{ p.label }}
-        </div>
-        <div class="preset__hint">
-          {{ p.hint }}
-        </div>
-      </button>
-    </div>
-  </fieldset>
+        <span class="preset__caption">{{ meta.caption }}</span>
+        <strong class="preset__label">{{ modelValue.label }}</strong>
+      </span>
+    </template>
+    <template #item="{ item }">
+      <span class="preset__option">
+        <strong>{{ item.label }}</strong>
+        <span class="preset__hint">{{ item.hint }}</span>
+      </span>
+    </template>
+  </USelectMenu>
 </template>
 
 <style scoped>
 .preset {
-  border: 0;
-  padding: 0;
-  margin: 0;
+  flex: 0 0 auto;
 }
 
-.preset__legend {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #888;
-  margin-bottom: 0.5rem;
-}
-
-.preset__grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
-.preset__card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.35rem;
-  padding: 0.85rem 1rem;
+.preset :deep(.preset__trigger) {
   background: #1c1c1c;
   border: 1px solid #2a2a2a;
-  border-radius: 12px;
-  text-align: left;
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  min-height: 30px;
   cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
-  color: #FDF7F1;
+  transition: border-color 120ms ease, background 120ms ease;
 }
 
-.preset__card:hover {
+.preset :deep(.preset__trigger:hover) {
   border-color: #3a3a3a;
 }
 
-.preset__card--active {
-  border-color: var(--color-icterine-400);
-  background: rgba(225, 253, 95, 0.06);
-}
-
-.preset__card--active .preset__icon {
-  color: var(--color-icterine-400);
+.preset__value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
 }
 
 .preset__icon {
-  width: 1.25rem;
-  height: 1.25rem;
-  color: #a8a8a8;
+  width: 0.9rem;
+  height: 0.9rem;
+  color: var(--color-icterine-400);
+  flex-shrink: 0;
+}
+
+.preset__caption {
+  color: #888;
+  font-weight: 500;
 }
 
 .preset__label {
+  color: #FDF7F1;
   font-weight: 700;
-  font-size: 0.95rem;
+}
+
+.preset__option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0.15rem 0;
 }
 
 .preset__hint {
-  font-size: 0.8rem;
+  display: block;
+  font-size: 0.72rem;
   color: #888;
   line-height: 1.3;
 }

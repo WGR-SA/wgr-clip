@@ -1,18 +1,25 @@
 <script setup lang="ts">
 const queue = useTranscodeQueue()
+const shellRef = ref<HTMLElement | null>(null)
 
 useHead({
-  htmlAttrs: { lang: 'en', class: 'dark' }
+  htmlAttrs: { lang: 'fr', class: 'dark' }
 })
 
 onMounted(async () => {
   await queue.bindListeners()
 })
+
+useAutoFit(shellRef)
+useBatchNotification()
 </script>
 
 <template>
   <UApp>
-    <div class="shell">
+    <div
+      ref="shellRef"
+      class="shell"
+    >
       <main class="shell__main">
         <NuxtPage />
       </main>
@@ -25,12 +32,12 @@ onMounted(async () => {
 .shell {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
   background: #232323;
+  /* No min-height: 100vh — let the content + footer determine the height
+     so useAutoFit can resize the window down to fit when the queue is empty. */
 }
 
 .shell__main {
-  flex: 1;
   padding: 1.25rem;
   display: flex;
   flex-direction: column;

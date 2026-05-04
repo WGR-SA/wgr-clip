@@ -5,7 +5,7 @@
   "identifier": "ch.wgr.clip",
   "build": {
     "frontendDist": "../.output/public",
-    "devUrl": "http://localhost:3000",
+    "devUrl": "http://localhost:1420",
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run generate"
   },
@@ -14,15 +14,16 @@
       {
         "label": "main",
         "title": "wgr-clip",
-        "width": 1100,
-        "height": 750,
-        "minWidth": 900,
-        "minHeight": 600,
+        "width": 940,
+        "height": 620,
+        "minWidth": 760,
+        "minHeight": 480,
         "resizable": true,
         "fullscreen": false,
         "decorations": true,
         "transparent": false,
-        "backgroundColor": "#232323"
+        "backgroundColor": "#232323",
+        "dragDropEnabled": true
       }
     ],
     "security": {
@@ -59,7 +60,7 @@
   "plugins": {
     "updater": {
       "active": true,
-      "pubkey": "REPLACE_WITH_TAURI_SIGNER_PUBKEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFEOUQwNzBBMEQzNzAwNjkKUldScEFEY05DZ2VkSGVrMG8wWlVCQlhMSDNlTm9QQ2NqRTZPNUQxRVhHNVorSkZsQ0tzRnpSOEcK",
       "endpoints": [
         "https://github.com/wgr-sa/wgr-clip/releases/latest/download/latest.json"
       ],

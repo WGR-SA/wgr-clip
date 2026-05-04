@@ -1,5 +1,5 @@
 use crate::errors::AppError;
-use crate::transcode::{encoder, Job, JobDiagnostics, Preset};
+use crate::transcode::{encoder, CustomParams, Job, JobDiagnostics, MediaKind, Preset};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -7,9 +7,6 @@ use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
 use walkdir::WalkDir;
 
-const VIDEO_EXTS: &[&str] = &[
-    "mp4", "mov", "mkv", "avi", "webm", "m4v", "flv", "wmv", "mts", "m2ts", "ts", "3gp",
-];
 const MAX_BATCH: usize = 10_000;
 
 #[derive(Debug, Deserialize)]
@@ -26,8 +23,10 @@ pub struct AppInfo {
     pub ffmpeg_version: String,
 }
 
-/// Recursively expand a list of dropped paths into a flat list of video files.
-/// Folders are walked depth 5; non-video files are filtered; total cap of MAX_BATCH.
+/// Recursively expand a list of dropped paths into a flat list of supported
+/// media files (video, image or audio). Folders walked depth 5; non-media
+/// files are filtered out. Total cap of MAX_BATCH protects against runaway
+/// drops on huge folders.
 #[tauri::command]
 pub fn expand_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
     let mut out = Vec::new();
@@ -36,7 +35,7 @@ pub fn expand_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
             continue;
         }
         if p.is_file() {
-            if has_video_ext(&p) {
+            if MediaKind::from_path(&p).is_some() {
                 out.push(p);
                 if out.len() >= MAX_BATCH {
                     break;
@@ -45,7 +44,7 @@ pub fn expand_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
             continue;
         }
         for entry in WalkDir::new(&p).max_depth(5).follow_links(false).into_iter().filter_map(|e| e.ok()) {
-            if entry.file_type().is_file() && has_video_ext(entry.path()) {
+            if entry.file_type().is_file() && MediaKind::from_path(entry.path()).is_some() {
                 out.push(entry.path().to_path_buf());
                 if out.len() >= MAX_BATCH {
                     break 'outer;
@@ -56,17 +55,12 @@ pub fn expand_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
     out
 }
 
-fn has_video_ext(p: &Path) -> bool {
-    p.extension()
-        .and_then(|e| e.to_str())
-        .map(|e| VIDEO_EXTS.iter().any(|v| v.eq_ignore_ascii_case(e)))
-        .unwrap_or(false)
-}
-
 #[derive(Debug, Deserialize)]
 pub struct StartJobsArgs {
     pub inputs: Vec<PathBuf>,
     pub preset: Preset,
+    #[serde(default)]
+    pub custom: Option<CustomParams>,
     pub output_dir: Option<PathBuf>,
 }
 
@@ -74,23 +68,28 @@ pub struct StartJobsArgs {
 pub fn start_jobs(state: State<'_, AppState>, args: StartJobsArgs) -> Result<Vec<Uuid>, AppError> {
     let mut ids = Vec::with_capacity(args.inputs.len());
     for input in args.inputs {
+        let kind = MediaKind::from_path(&input).unwrap_or(MediaKind::Video);
         let dir = match &args.output_dir {
             Some(d) => d.clone(),
             None => default_output_dir(&input),
         };
         std::fs::create_dir_all(&dir).map_err(|e| AppError::Other(e.to_string()))?;
-        let output = encoder::resolve_output_path(&input, &dir, args.preset);
-        let id = state.queue.enqueue(input, output, args.preset);
+        let output = encoder::resolve_output_path(&input, &dir, args.preset, kind);
+        let id = state
+            .queue
+            .enqueue(input, output, args.preset, kind, args.custom);
         ids.push(id);
     }
     Ok(ids)
 }
 
 fn default_output_dir(input: &Path) -> PathBuf {
+    // Default output sits next to the source file so users find it without
+    // hunting through subfolders. Output filename is suffixed with the preset.
     input
         .parent()
-        .map(|p| p.join("wgr-clip"))
-        .unwrap_or_else(|| PathBuf::from("./wgr-clip"))
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 #[tauri::command]
@@ -115,12 +114,18 @@ pub fn list_jobs(state: State<'_, AppState>) -> Vec<Job> {
 
 #[tauri::command]
 pub fn retry_job(state: State<'_, AppState>, id: Uuid) -> Result<Uuid, AppError> {
-    let (input, output, preset) = match state.queue.jobs.get(&id) {
-        Some(j) => (j.input.clone(), j.output.clone(), j.preset),
+    let (input, output, preset, kind, custom) = match state.queue.jobs.get(&id) {
+        Some(j) => (
+            j.input.clone(),
+            j.output.clone(),
+            j.preset,
+            j.kind,
+            j.custom,
+        ),
         None => return Err(AppError::Other(format!("job {id} not found"))),
     };
     state.queue.jobs.remove(&id);
-    let new_id = state.queue.enqueue(input, output, preset);
+    let new_id = state.queue.enqueue(input, output, preset, kind, custom);
     Ok(new_id)
 }
 
@@ -141,9 +146,21 @@ pub fn get_diagnostics(
     let arch = std::env::consts::ARCH.to_string();
     let hw = format!("{:?}", *state.hw_accel.read());
     let preset = j.preset;
-    let args = crate::transcode::preset::build_args(preset, *state.hw_accel.read(), &j.input, &j.output)
-        .into_iter()
-        .collect();
+    let kind = j.kind;
+    let custom = j.custom;
+    // Best-effort: we don't re-probe here, height defaults trigger the
+    // 1080p bitrate row which is the most common case.
+    let args = crate::transcode::preset::build_args(
+        kind,
+        preset,
+        *state.hw_accel.read(),
+        &j.input,
+        &j.output,
+        0,
+        custom,
+    )
+    .into_iter()
+    .collect();
     let error_kind = j
         .error
         .as_ref()
@@ -164,6 +181,7 @@ pub fn get_diagnostics(
         input_path: j.input.clone(),
         output_path: j.output.clone(),
         preset,
+        kind,
         args,
         error_kind,
         stderr_tail: j.stderr_tail.clone(),

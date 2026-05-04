@@ -1,12 +1,21 @@
 # wgr-clip
 
-Drag-drop video transcoder for the web. Built for clients who shouldn't have
-to know what H.264 means.
+Drag-drop converter for **video, image and audio** files — pour les clients qui ne devraient pas avoir à savoir ce qu'est un codec.
+
+Drop any media → wgr-clip auto-detects the kind and produces a web-friendly file:
+- **Video** → `.mp4` (H.264 + AAC, hardware-accelerated when available)
+- **Image** → `.jpg` (resized to a safe max dim, JPEG quality preset)
+- **Audio** → `.mp3` (LAME, universal compat)
+
+3 presets per kind (Original / Web / High Quality) plus a **Personnalisé** mode for custom dimensions, CRF and bitrates. Multi-file batch with real-time progress, cancellable, error details with copy-diagnostics. Click the dropzone or drop folders — both work.
 
 ## Stack
-- Tauri 2 + Rust
-- Nuxt 4 + Nuxt UI 4 (SPA)
-- ffmpeg / ffprobe sidecars (bundled, no system install required)
+- **Tauri 2** + Rust transcode engine
+- **Nuxt 4** + **Nuxt UI 4** (SPA)
+- **ffmpeg / ffprobe** bundled as Tauri sidecars (no system install)
+- **Native notifications** when batches complete
+- **Persisted settings** between launches
+- **Auto-updater** via GitHub Releases (`tauri-plugin-updater`)
 - macOS (universal) + Windows (x86_64)
 
 ## Quick start
@@ -17,43 +26,75 @@ node scripts/rename-sidecars.mjs   # downloads ffmpeg + ffprobe (~80 MB each)
 npm run tauri:dev
 ```
 
+App opens at `http://localhost:1420` (port chosen to avoid collision with other Nuxt dev servers).
+
 ## Project layout
 
 ```
-app/                  Nuxt 4 source (UI)
-src-tauri/            Rust + Tauri config
-  src/transcode/      job types, ffprobe, ffmpeg encoder, queue, presets
-  src/commands.rs     Tauri commands exposed to JS
-  src/hw_accel.rs     boot-time encoder detection
-  src/lib.rs          Tauri builder + plugin registration
-  binaries/           ffmpeg-<triple> sidecars (gitignored)
-  capabilities/       Tauri 2 permissions (sidecar exec scoped)
+app/                       Nuxt 4 source (UI)
+  components/
+    DropZone.vue           drag-drop + click to pick files
+    PresetSelector.vue     pill dropdowns per media kind
+    DestinationPicker.vue  output folder pill
+    JobList / JobRow      live progress + actions
+    JobErrorPanel         expandable stderr + copy diagnostics
+    CustomParamsPanel     advanced inputs when "Personnalisé" is selected
+  composables/
+    useTranscodeQueue.ts   reactive Map of jobs + Tauri event listeners
+    useAutoFit.ts          auto-resize Tauri window to content
+    useBatchNotification   fires native notif on batch completion
+    useSettingsStore       persists preferences via tauri-plugin-store
+  types/job.ts             Preset, MediaKind, Job, CustomParams TS types
+src-tauri/                 Rust + Tauri config
+  src/
+    main.rs · lib.rs       entry, plugin registration, AppState
+    hw_accel.rs            boot-time h264 encoder detection (videotoolbox / nvenc / qsv / libx264)
+    commands.rs            Tauri commands invoked from JS (start_jobs, expand_paths, etc.)
+    transcode/
+      mod.rs               Job, Preset, MediaKind, CustomParams types
+      probe.rs             ffprobe duration + stream metadata
+      preset.rs            (kind, preset) → ffmpeg argv mapping
+      encoder.rs           spawn ffmpeg, parse `-progress pipe:1`, emit events
+      queue.rs             Tokio mpsc worker, single concurrent job
+    errors.rs              JobError categories surfaced to UI
+  capabilities/             Tauri 2 permissions (sidecar exec scoped to ffmpeg/ffprobe)
+  binaries/                 ffmpeg-<triple> sidecars (gitignored, fetched on install)
+  icons/                    icns / ico / PNGs generated from icon-1024.png
 scripts/
-  rename-sidecars.mjs cross-platform ffmpeg fetcher (idempotent, sha-verified)
+  rename-sidecars.mjs      cross-platform ffmpeg fetcher (idempotent, sanity-checks via -version)
+  generate-icon.mjs        WGR-branded icon generator (--label flag, auto-fits text)
 .github/workflows/
-  release.yml         tag-driven build + GitHub release (mac universal + win)
-  tag-version.yml     auto-tag from src-tauri/Cargo.toml on push to main
+  release.yml              tag-driven build + GitHub release (mac universal + win)
+  tag-version.yml          auto-tag from src-tauri/Cargo.toml on push to main
 ```
 
 ## Releasing
 
-1. Bump `src-tauri/Cargo.toml` version + `package.json` + `tauri.conf.json`.
-2. Push to `main` → `tag-version.yml` creates `v<version>` tag.
-3. `release.yml` builds for macOS + Windows, drafts a GitHub release with the
-   `.dmg`, `.msi`, and `latest.json` updater manifest.
-4. Manually publish the draft when ready.
+1. Bump version in `src-tauri/Cargo.toml`, `package.json`, `tauri.conf.json` (keep them in sync).
+2. Push to `main` → `tag-version.yml` creates `v<version>` tag automatically.
+3. `release.yml` runs the macOS + Windows matrix, drafts a GitHub release with `.dmg`, `.msi` and `latest.json` (updater manifest).
+4. Manually publish the draft when QA is happy.
 
-## Code signing (deferred to v1.1)
+### Required GitHub secret
+- `TAURI_SIGNING_PRIVATE_KEY` — paste the **entire content** of the file generated by `npx tauri signer generate -w ~/.tauri/wgr-clip.key`. Required even though we don't OS-codesign yet, because the auto-updater verifies a minisign signature on every payload.
 
-This v1 ships **unsigned** binaries:
-- **macOS**: clients must right-click → Open on first launch.
-- **Windows**: SmartScreen will warn until a code-signing cert is added.
+## Code signing (v1.1)
 
-The Tauri auto-updater works regardless of OS-level signing because it uses
-its own minisign verification (`TAURI_SIGNING_PRIVATE_KEY`).
+v1 ships **unsigned** desktop builds:
+- **macOS**: clients right-click → Open on first launch (Gatekeeper prompt). Auto-updates work transparently from then on (Tauri's minisign ≠ Apple codesign).
+- **Windows**: SmartScreen will show "Unrecognized publisher" warning.
 
-`release.yml` has labelled placeholders showing where to slot Apple
-notarization (rcodesign / notarytool) and Windows Azure Key Vault signing.
+`release.yml` has labelled `# TODO v1.1` markers where Apple notarization (rcodesign / notarytool) and Windows Azure Key Vault signing slot in. The Holtmed pipeline is the reference for Azure Key Vault signing.
 
-## See also
-- [implementation plan](../../.claude/plans/ok-j-ai-besoin-pour-snug-torvalds.md)
+## Custom icons
+
+The app icon is generated from a 1024×1024 source PNG with `npx tauri icon`:
+
+```sh
+node scripts/generate-icon.mjs                 # default label "clip"
+node scripts/generate-icon.mjs --label desk    # for sibling apps
+npx tauri icon src-tauri/icons/icon-1024.png   # produces icns/ico/all PNG sizes
+```
+
+## License
+MIT — © wgr SA, Lausanne.

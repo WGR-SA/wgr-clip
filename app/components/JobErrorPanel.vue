@@ -9,24 +9,24 @@ const showDetails = ref(false)
 
 const humanMessage = computed(() => {
   const e = props.job.error
-  if (!e) return 'Unknown error.'
+  if (!e) return 'Erreur inconnue.'
   switch (e.kind) {
     case 'InputNotFound':
-      return 'The input file could not be found. It may have been moved or renamed.'
+      return 'Le fichier source est introuvable. Il a peut-être été déplacé ou renommé.'
     case 'ProbeFailed':
-      return 'We could not read this file\'s metadata. It might be corrupt or use an unusual container.'
+      return 'Impossible de lire les métadonnées de ce fichier — il est peut-être corrompu ou utilise un conteneur inhabituel.'
     case 'UnsupportedCodec':
-      return 'The codec or format inside this file is not supported by the bundled ffmpeg build.'
+      return 'Le codec ou le format à l\'intérieur du fichier n\'est pas pris en charge par cette version de ffmpeg.'
     case 'OutputWriteError':
-      return 'We could not write the output file. Check that the output folder exists and is writable.'
+      return 'Impossible d\'écrire le fichier de sortie. Vérifiez que le dossier existe et que vous avez les droits d\'écriture.'
     case 'FfmpegCrashed':
-      return 'ffmpeg failed during the encode. Open the technical details below.'
+      return 'ffmpeg a échoué pendant la conversion. Détails techniques ci-dessous.'
     case 'Cancelled':
-      return 'Cancelled.'
+      return 'Annulé.'
     case 'Internal':
-      return 'An internal error occurred. Open the technical details below.'
+      return 'Erreur interne. Détails techniques ci-dessous.'
   }
-  return 'Unknown error.'
+  return 'Erreur inconnue.'
 })
 
 const stderrText = computed(() => {
@@ -35,7 +35,7 @@ const stderrText = computed(() => {
   if (e && 'data' in e && e.data && typeof e.data === 'object' && 'stderr_tail' in (e.data as Record<string, unknown>)) {
     return String((e.data as { stderr_tail?: string }).stderr_tail ?? '')
   }
-  return '(no stderr captured)'
+  return '(aucun détail capturé)'
 })
 
 async function copyDiag () {
@@ -79,7 +79,7 @@ async function revealOutputDir () {
         icon="i-lucide-rotate-ccw"
         @click="retry"
       >
-        Retry
+        Réessayer
       </UButton>
       <UButton
         size="xs"
@@ -88,7 +88,7 @@ async function revealOutputDir () {
         icon="i-lucide-copy"
         @click="copyDiag"
       >
-        Copy diagnostics
+        Copier les détails
       </UButton>
       <UButton
         size="xs"
@@ -97,7 +97,7 @@ async function revealOutputDir () {
         icon="i-lucide-folder-input"
         @click="revealInput"
       >
-        Open input
+        Source
       </UButton>
       <UButton
         size="xs"
@@ -106,7 +106,7 @@ async function revealOutputDir () {
         icon="i-lucide-folder-output"
         @click="revealOutputDir"
       >
-        Open output
+        Destination
       </UButton>
       <UButton
         size="xs"
@@ -115,7 +115,7 @@ async function revealOutputDir () {
         :icon="showDetails ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
         @click="showDetails = !showDetails"
       >
-        {{ showDetails ? 'Hide' : 'Show' }} details
+        {{ showDetails ? 'Masquer' : 'Voir' }} les détails
       </UButton>
     </div>
 

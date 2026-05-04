@@ -1,6 +1,6 @@
 use super::{
-    preset::build_args, probe::probe, JobCancelledEvent, JobDoneEvent, JobErrorEvent, Preset,
-    ProgressTick,
+    preset::build_args, probe::probe, CustomParams, JobCancelledEvent, JobDoneEvent, JobErrorEvent,
+    MediaKind, Preset, ProgressTick,
 };
 use crate::errors::JobError;
 use crate::hw_accel::HwAccel;
@@ -34,6 +34,8 @@ pub async fn run_job(
     input: &Path,
     output: &Path,
     preset: Preset,
+    kind: MediaKind,
+    custom: Option<CustomParams>,
     hw: HwAccel,
     cancel: CancellationToken,
 ) -> Result<EncodeOutcome, JobError> {
@@ -59,7 +61,7 @@ pub async fn run_job(
     let duration_us = probed.duration_us;
 
     // 2. Build ffmpeg argv
-    let args = build_args(preset, hw, input, output);
+    let args = build_args(kind, preset, hw, input, output, probed.height, custom);
     log::info!(target: "transcode", "ffmpeg argv for job {job_id}: {args:?}");
 
     // 3. Spawn
@@ -344,18 +346,25 @@ fn emit_cancelled(app: &AppHandle, job_id: Uuid) {
     let _ = app.emit(EV_CANCELLED, &JobCancelledEvent { job_id });
 }
 
-/// Resolve an output path: `<input-stem>_<preset>.mp4` in `output_dir`,
-/// appending `_2`, `_3`, ... on collision.
-pub fn resolve_output_path(input: &Path, output_dir: &Path, preset: Preset) -> PathBuf {
+/// Resolve an output path: `<input-stem>_<preset>.<ext>` in `output_dir`,
+/// where `<ext>` depends on the media kind. Appends `_2`, `_3`, … on
+/// collision so we never overwrite existing files.
+pub fn resolve_output_path(
+    input: &Path,
+    output_dir: &Path,
+    preset: Preset,
+    kind: MediaKind,
+) -> PathBuf {
     let stem = input
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| "output".into());
+    let ext = kind.output_ext();
     let base = format!("{stem}_{}", preset.slug());
-    let mut candidate = output_dir.join(format!("{base}.mp4"));
+    let mut candidate = output_dir.join(format!("{base}.{ext}"));
     let mut n = 2;
     while candidate.exists() {
-        candidate = output_dir.join(format!("{base}_{n}.mp4"));
+        candidate = output_dir.join(format!("{base}_{n}.{ext}"));
         n += 1;
     }
     candidate

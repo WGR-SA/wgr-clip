@@ -34,6 +34,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
             let hw_accel = Arc::new(RwLock::new(hw_accel::HwAccel::Software));
             let ffmpeg_version = Arc::new(RwLock::new(String::from("unknown")));
