@@ -34,17 +34,22 @@ if (process.env.CI && process.env.WGR_CLIP_FETCH_FFMPEG !== '1' && process.env.n
 }
 
 const SOURCES = {
+  // ARM64 macOS: copy from Homebrew (preinstalled on GH macos-14 runners and
+  // most dev macs). evermeet.cx serves x86_64 only, so brew is the simplest
+  // path to a real arm64-native binary.
   'aarch64-apple-darwin': {
-    ffmpeg: 'https://evermeet.cx/ffmpeg/getrelease/zip',
-    ffprobe: 'https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip',
+    kind: 'brew',
     ext: ''
   },
+  // Intel macOS: evermeet.cx ships a static x86_64 binary.
   'x86_64-apple-darwin': {
+    kind: 'http',
     ffmpeg: 'https://evermeet.cx/ffmpeg/getrelease/zip',
     ffprobe: 'https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip',
     ext: ''
   },
   'x86_64-pc-windows-msvc': {
+    kind: 'http',
     ffmpeg: 'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip',
     ffprobe: null, // BtbN archive includes both binaries
     ext: '.exe'
@@ -95,6 +100,21 @@ function verifyBinary (path) {
   console.log(`[fetch-ffmpeg]   ✓ ${(r.stdout || '').split('\n')[0]}`)
 }
 
+function copyBrewBinaries (triple, ext) {
+  // Detect the Homebrew prefix (arm64 → /opt/homebrew, x86_64 → /usr/local).
+  const prefix = process.arch === 'arm64' ? '/opt/homebrew' : '/usr/local'
+  for (const tool of ['ffmpeg', 'ffprobe']) {
+    const src = `${prefix}/bin/${tool}`
+    if (!existsSync(src)) {
+      throw new Error(`${tool} not found at ${src}. Install with: brew install ffmpeg`)
+    }
+    const dest = join(BIN_DIR, `${tool}-${triple}${ext}`)
+    copyFileSync(src, dest)
+    chmodSync(dest, 0o755)
+    verifyBinary(dest)
+  }
+}
+
 async function fetchTriple (triple) {
   const src = SOURCES[triple]
   if (!src) throw new Error(`No download source for triple ${triple}`)
@@ -112,6 +132,12 @@ async function fetchTriple (triple) {
     }
     console.log(`[fetch-ffmpeg] ${triple}: existing binaries broken — refetch.`)
     for (const p of expected) rmSync(p, { force: true })
+  }
+
+  if (src.kind === 'brew') {
+    console.log(`[fetch-ffmpeg] ${triple}: copying from Homebrew`)
+    copyBrewBinaries(triple, ext)
+    return
   }
 
   // Single-archive case (Windows BtbN ships both binaries in one zip)
