@@ -54,7 +54,10 @@ jobs:
           workspaces: src-tauri -> target
 
       - name: Install npm deps
-        run: npm ci
+        # --force bypasses npm's platform check so the cross-platform
+        # @ffmpeg-installer subpackages (darwin-arm64 / darwin-x64 / win32-x64)
+        # all install regardless of which runner OS we are on.
+        run: npm ci --force
 
       - name: Fetch ffmpeg sidecars
         run: node scripts/rename-sidecars.mjs --all-targets
