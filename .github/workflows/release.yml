@@ -1,0 +1,77 @@
+name: Release Build and Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: universal-apple-darwin
+            args: "--target universal-apple-darwin"
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            args: ""
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      TAG: ${{ github.ref_name }}
+      CHANNEL: ${{ contains(github.ref_name, '-beta') && 'beta' || contains(github.ref_name, '-rc') && 'rc' || contains(github.ref_name, '-dev') && 'dev' || 'stable' }}
+      PRERELEASE: ${{ contains(github.ref_name, '-') }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+      WGR_CLIP_FETCH_FFMPEG: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add macOS Rust targets (universal)
+        if: matrix.os == 'macos-14'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install npm deps
+        run: npm ci
+
+      - name: Fetch ffmpeg sidecars
+        run: node scripts/rename-sidecars.mjs --all-targets
+
+      # TODO v1.1: Apple Developer ID signing + notarization
+      # TODO v1.1: Windows Azure Key Vault signing (reuse Holtmed pattern)
+
+      - name: Build Tauri application
+        id: tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "wgr-clip ${{ github.ref_name }}"
+          releaseBody: "Drag-drop video transcoder for the web — by WGR. macOS users: this build is not yet code-signed; on first launch, right-click the app then Open. Auto-updates work transparently from then on."
+          releaseDraft: true
+          prerelease: ${{ env.PRERELEASE }}
+          includeUpdaterJson: true
+          args: ${{ matrix.args }}

@@ -1,0 +1,27 @@
+name: Tag from Cargo.toml
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tag if Cargo.toml version changed
+        uses: 0x30-ch/cargo-version-tag@v1
+        with:
+          cargo-path: src-tauri/Cargo.toml
+          tag-prefix: v
+          push: "true"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

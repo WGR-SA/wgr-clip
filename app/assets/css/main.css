@@ -1,0 +1,57 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@theme static {
+  --font-sans: "GT Maru", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Migra", ui-serif, Georgia, serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* WGR icterine — brand accent #E1FD5F */
+  --color-icterine-50:  #fbffe6;
+  --color-icterine-100: #f5ffbf;
+  --color-icterine-200: #efff8a;
+  --color-icterine-300: #e9ff55;
+  --color-icterine-400: #e1fd5f;
+  --color-icterine-500: #c8e240;
+  --color-icterine-600: #a3b82a;
+  --color-icterine-700: #7a8a1f;
+  --color-icterine-800: #525c15;
+  --color-icterine-900: #2a2f0a;
+  --color-icterine-950: #151704;
+}
+
+:root,
+html {
+  color-scheme: dark;
+  background: #232323;
+}
+
+html,
+body,
+#__nuxt {
+  background: #232323;
+  color: #FDF7F1;
+  min-height: 100vh;
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--color-icterine-400);
+  color: #181818;
+}
+
+/* Custom scrollbar (dark) */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #181818;
+}
+::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #525252;
+}
