@@ -100,13 +100,25 @@ function verifyBinary (path) {
   console.log(`[fetch-ffmpeg]   ✓ ${(r.stdout || '').split('\n')[0]}`)
 }
 
+function ensureBrewFfmpeg (prefix) {
+  const ffmpeg = `${prefix}/bin/ffmpeg`
+  const ffprobe = `${prefix}/bin/ffprobe`
+  if (existsSync(ffmpeg) && existsSync(ffprobe)) return
+  console.log('[fetch-ffmpeg] ffmpeg not found in Homebrew — running `brew install ffmpeg` (this can take a few minutes)')
+  const r = spawnSync('brew', ['install', 'ffmpeg'], { stdio: 'inherit' })
+  if (r.status !== 0) {
+    throw new Error(`brew install ffmpeg failed (exit ${r.status}). Install manually: brew install ffmpeg`)
+  }
+}
+
 function copyBrewBinaries (triple, ext) {
   // Detect the Homebrew prefix (arm64 → /opt/homebrew, x86_64 → /usr/local).
   const prefix = process.arch === 'arm64' ? '/opt/homebrew' : '/usr/local'
+  ensureBrewFfmpeg(prefix)
   for (const tool of ['ffmpeg', 'ffprobe']) {
     const src = `${prefix}/bin/${tool}`
     if (!existsSync(src)) {
-      throw new Error(`${tool} not found at ${src}. Install with: brew install ffmpeg`)
+      throw new Error(`${tool} not found at ${src} after \`brew install ffmpeg\``)
     }
     const dest = join(BIN_DIR, `${tool}-${triple}${ext}`)
     copyFileSync(src, dest)
