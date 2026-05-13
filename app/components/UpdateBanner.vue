@@ -2,7 +2,12 @@
 import { check, type Update } from '@tauri-apps/plugin-updater'
 import { relaunch } from '@tauri-apps/plugin-process'
 
-const update = ref<Update | null>(null)
+// shallowRef instead of ref — the Update instance has private class fields
+// (#client, #responseType, etc.) that throw "Cannot read private member"
+// when Vue's reactive proxy intercepts method calls. shallowRef keeps the
+// object identity intact so `update.value.downloadAndInstall()` keeps its
+// proper `this`.
+const update = shallowRef<Update | null>(null)
 const installing = ref(false)
 const dismissed = ref(false)
 const error = ref<string | null>(null)
