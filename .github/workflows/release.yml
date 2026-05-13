@@ -62,7 +62,9 @@ jobs:
       - name: Fetch ffmpeg sidecars
         run: node scripts/rename-sidecars.mjs --all-targets
 
-      # TODO v1.1: Windows Azure Key Vault signing (reuse Holtmed pattern)
+      - name: Install AzureSignTool (Windows)
+        if: matrix.os == 'windows-latest'
+        run: dotnet tool install --global AzureSignTool
 
       - name: Build Tauri application
         id: tauri
@@ -81,8 +83,109 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "wgr-clip ${{ github.ref_name }}"
-          releaseBody: "Drag-drop video transcoder for the web — by WGR. macOS users: this build is not yet code-signed; on first launch, right-click the app then Open. Auto-updates work transparently from then on."
+          releaseBody: "Drag-drop video transcoder for the web — by WGR. Auto-updates handled in-app from then on."
           releaseDraft: true
           prerelease: ${{ env.PRERELEASE }}
           includeUpdaterJson: true
           args: ${{ matrix.args }}
+
+      # --- Windows code signing via Azure Key Vault ------------------------
+      # Mirrors the Holtmed pattern. Skipped automatically when the Azure
+      # secrets are missing (e.g. before the Key Vault is provisioned).
+
+      - name: Locate NSIS EXE
+        if: matrix.os == 'windows-latest'
+        id: findexe
+        shell: pwsh
+        env:
+          AZURE_KEY_VAULT_URI: ${{ secrets.AZURE_KEY_VAULT_URI }}
+        run: |
+          if (-not $env:AZURE_KEY_VAULT_URI) {
+            "AZURE_KEY_VAULT_URI not set — skipping Windows code signing." | Write-Host
+            "SKIP=1" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            exit 0
+          }
+          $exe = Get-ChildItem -Path "src-tauri/target/release/bundle/nsis/*-setup.exe" | Select-Object -First 1
+          if (-not $exe) { Write-Error "NSIS setup EXE not found"; exit 1 }
+          "EXE=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "EXENAME=$($exe.Name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "Found EXE: $($exe.FullName)"
+
+      - name: Code-sign EXE (Azure Key Vault)
+        if: matrix.os == 'windows-latest' && steps.findexe.outputs.SKIP != '1'
+        shell: pwsh
+        env:
+          AZURE_KEY_VAULT_URI: ${{ secrets.AZURE_KEY_VAULT_URI }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_CERTIFICATE_NAME: ${{ secrets.AZURE_CERTIFICATE_NAME }}
+        run: |
+          azuresigntool sign `
+            --file-digest sha256 `
+            --azure-key-vault-url "$env:AZURE_KEY_VAULT_URI" `
+            --azure-key-vault-client-id "$env:AZURE_CLIENT_ID" `
+            --azure-key-vault-tenant-id "$env:AZURE_TENANT_ID" `
+            --azure-key-vault-client-secret "$env:AZURE_CLIENT_SECRET" `
+            --azure-key-vault-certificate "$env:AZURE_CERTIFICATE_NAME" `
+            --timestamp-rfc3161 "http://timestamp.globalsign.com/tsa/r45standard" `
+            --verbose `
+            "${{ steps.findexe.outputs.EXE }}"
+
+      - name: Regenerate Tauri minisig (post code-sign)
+        if: matrix.os == 'windows-latest' && steps.findexe.outputs.SKIP != '1'
+        shell: pwsh
+        run: |
+          $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
+          cmd /c "npx tauri signer sign --private-key ""%TAURI_SIGNING_PRIVATE_KEY%"" --password """" ""${{ steps.findexe.outputs.EXE }}"""
+
+      - name: Patch GitHub Release with signed EXE + updated latest.json
+        if: matrix.os == 'windows-latest' && steps.findexe.outputs.SKIP != '1'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          $exe = "${{ steps.findexe.outputs.EXE }}"
+          $exeName = "${{ steps.findexe.outputs.EXENAME }}"
+          $sig = "$exe.sig"
+          if (-not (Test-Path $sig)) { $sig = "$exe.minisig" }
+          if (-not (Test-Path $sig)) { Write-Error "Minisig not found next to EXE"; exit 1 }
+          $signature = (Get-Content $sig -Raw).Trim()
+          $version = "${{ steps.tauri.outputs.appVersion }}"
+
+          # Replace the unsigned EXE asset and its .sig on the draft release.
+          gh release upload "$env:TAG" "$exe" --clobber
+          gh release upload "$env:TAG" "$sig" --clobber
+
+          # Compose latest.json so the updater verifies the SIGNED bytes.
+          $latest = @{
+            version = $version
+            notes = "wgr-clip v$version"
+            pub_date = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssZ")
+            platforms = @{
+              'windows-x86_64' = @{
+                signature = $signature
+                url = "https://github.com/${{ github.repository }}/releases/download/$env:TAG/$exeName"
+              }
+            }
+          }
+          # If macOS already published a latest.json on this release, merge its
+          # darwin platform entries so a single file covers both OSes.
+          $existing = gh release view "$env:TAG" --json assets --jq '.assets[] | select(.name=="latest.json") | .url' 2>$null
+          if ($existing) {
+            try {
+              $existingJson = (Invoke-WebRequest -Uri $existing -UseBasicParsing).Content | ConvertFrom-Json
+              if ($existingJson.platforms) {
+                foreach ($k in $existingJson.platforms.PSObject.Properties.Name) {
+                  if ($k -ne 'windows-x86_64') {
+                    $latest.platforms[$k] = $existingJson.platforms.$k
+                  }
+                }
+              }
+            } catch { Write-Host "No mergeable latest.json yet — writing fresh one." }
+          }
+          New-Item -ItemType Directory -Force -Path "deploy" | Out-Null
+          $latestPath = "deploy/latest.json"
+          ($latest | ConvertTo-Json -Depth 10) | Out-File $latestPath -Encoding utf8
+          gh release upload "$env:TAG" "$latestPath" --clobber
