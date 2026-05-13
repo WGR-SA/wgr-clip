@@ -24,13 +24,25 @@ impl HwAccel {
     }
 }
 
-/// Probe the bundled ffmpeg sidecar for available encoders **and** smoke-test
-/// the candidate hardware encoder. A codec listed in `-encoders` only means
-/// the static ffmpeg has it compiled in — it doesn't guarantee the user's
-/// machine has a working driver/GPU. We force-encode a tiny synthetic frame
-/// and fall back to libx264 if it exits non-zero, so the queue never spawns
-/// an h264_qsv/nvenc job on a machine that will reject it at runtime.
-pub async fn detect(app: &AppHandle) -> HwAccel {
+/// We default to libx264 software encoding for ALL video jobs. clip's main
+/// use case is "compress this file for the web", and libx264 in CRF mode
+/// adapts its bitrate to the actual content complexity — static screen
+/// recordings drop from ~10 Mb/s to ~1 Mb/s (10× smaller files) because
+/// 99% of macroblocks get encoded as zero-bit skips.
+///
+/// VideoToolbox / NVENC / QuickSync are bitrate-targeted hardware encoders;
+/// they're ~3× faster but spend the requested bitrate even on near-static
+/// content, producing files 3–10× larger than libx264 for the same input.
+/// They make sense for live streaming, not for file-size-driven exports.
+///
+/// The smoke-test + detection plumbing is kept in place (commented behind
+/// `_smoke_test`) so a future "Optimised for speed" toggle can opt back in.
+pub async fn detect(_app: &AppHandle) -> HwAccel {
+    HwAccel::Software
+}
+
+#[allow(dead_code)]
+async fn detect_hardware(app: &AppHandle) -> HwAccel {
     let cmd = match app.shell().sidecar("ffmpeg") {
         Ok(c) => c,
         Err(_) => return HwAccel::Software,
@@ -76,6 +88,7 @@ pub async fn detect(app: &AppHandle) -> HwAccel {
 /// Run a tiny synthetic encode to confirm the hardware encoder actually works
 /// on this machine. ~40ms of black at 64×64 → /dev/null. Returns true if
 /// ffmpeg exits with status 0.
+#[allow(dead_code)]
 async fn smoke_test(app: &AppHandle, codec: &str) -> bool {
     let cmd = match app.shell().sidecar("ffmpeg") {
         Ok(c) => c,
