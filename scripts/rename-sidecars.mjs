@@ -56,7 +56,10 @@ const SOURCES = {
   },
   'x86_64-pc-windows-msvc': {
     kind: 'btbn',
-    archiveUrl: 'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip',
+    // Literal "latest" tag (releases/download/latest/...) — stable across rebuilds.
+    // GitHub's auto-resolved /releases/latest now points to dated autobuilds
+    // whose asset filenames carry the build hash, breaking our pinned URL.
+    archiveUrl: 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip',
     ext: '.exe'
   }
 }
