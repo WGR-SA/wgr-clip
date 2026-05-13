@@ -62,7 +62,6 @@ jobs:
       - name: Fetch ffmpeg sidecars
         run: node scripts/rename-sidecars.mjs --all-targets
 
-      # TODO v1.1: Apple Developer ID signing + notarization
       # TODO v1.1: Windows Azure Key Vault signing (reuse Holtmed pattern)
 
       - name: Build Tauri application
@@ -70,6 +69,15 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Apple Developer ID signing + notarization. tauri-action sets up a
+          # temporary keychain, imports the cert, signs the .app/.dmg and
+          # submits to notarytool when all six are set. Empty on Windows.
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "wgr-clip ${{ github.ref_name }}"
