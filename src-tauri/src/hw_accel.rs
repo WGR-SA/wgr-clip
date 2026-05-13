@@ -24,8 +24,12 @@ impl HwAccel {
     }
 }
 
-/// Probe the bundled ffmpeg sidecar for available encoders. Falls back to
-/// software if anything goes wrong — better to encode slowly than crash.
+/// Probe the bundled ffmpeg sidecar for available encoders **and** smoke-test
+/// the candidate hardware encoder. A codec listed in `-encoders` only means
+/// the static ffmpeg has it compiled in — it doesn't guarantee the user's
+/// machine has a working driver/GPU. We force-encode a tiny synthetic frame
+/// and fall back to libx264 if it exits non-zero, so the queue never spawns
+/// an h264_qsv/nvenc job on a machine that will reject it at runtime.
 pub async fn detect(app: &AppHandle) -> HwAccel {
     let cmd = match app.shell().sidecar("ffmpeg") {
         Ok(c) => c,
@@ -48,13 +52,63 @@ pub async fn detect(app: &AppHandle) -> HwAccel {
         }
     }
 
-    if cfg!(target_os = "macos") && text.contains("h264_videotoolbox") {
+    let candidate = if cfg!(target_os = "macos") && text.contains("h264_videotoolbox") {
         HwAccel::VideoToolbox
     } else if cfg!(target_os = "windows") && text.contains("h264_nvenc") {
         HwAccel::Nvenc
     } else if cfg!(target_os = "windows") && text.contains("h264_qsv") {
         HwAccel::QuickSync
     } else {
+        return HwAccel::Software;
+    };
+
+    if smoke_test(app, candidate.h264_codec()).await {
+        candidate
+    } else {
+        log::warn!(
+            target: "hw_accel",
+            "candidate {candidate:?} listed in -encoders but smoke test failed — falling back to libx264"
+        );
         HwAccel::Software
     }
+}
+
+/// Run a tiny synthetic encode to confirm the hardware encoder actually works
+/// on this machine. ~40ms of black at 64×64 → /dev/null. Returns true if
+/// ffmpeg exits with status 0.
+async fn smoke_test(app: &AppHandle, codec: &str) -> bool {
+    let cmd = match app.shell().sidecar("ffmpeg") {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+    let mut args = vec![
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=black:size=64x64:rate=25:duration=0.04",
+        "-c:v",
+        codec,
+    ];
+    // VideoToolbox needs an explicit bitrate, NVENC accepts defaults.
+    if codec == "h264_videotoolbox" {
+        args.extend(["-b:v", "100k"]);
+    }
+    args.extend(["-f", "null", "-"]);
+
+    let spawn = cmd.args(args).spawn();
+    let (mut rx, _child) = match spawn {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let mut exit_code: i32 = -1;
+    while let Some(ev) = rx.recv().await {
+        if let CommandEvent::Terminated(p) = ev {
+            exit_code = p.code.unwrap_or(-1);
+            break;
+        }
+    }
+    exit_code == 0
 }
