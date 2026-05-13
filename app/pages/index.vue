@@ -8,9 +8,6 @@ useHead({ title: 'wgr-clip' })
       <h1 class="page__title">
         clip
       </h1>
-      <p class="page__tagline">
-        Compresse vidéos, images et audio pour le web. Drag, drop, c'est prêt.
-      </p>
     </header>
 
     <UpdateBanner />
@@ -57,13 +54,6 @@ useHead({ title: 'wgr-clip' })
   line-height: 1;
   color: #FDF7F1;
   margin: 0;
-}
-
-.page__tagline {
-  margin: 0;
-  font-size: 0.82rem;
-  color: #888;
-  line-height: 1.3;
 }
 
 .page__settings {

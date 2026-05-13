@@ -69,10 +69,10 @@ onBeforeUnmount(() => {
         class="dropzone__icon"
       />
       <h2 class="dropzone__title">
-        Déposez vos fichiers ou cliquez pour parcourir
+        Déposez ou cliquez pour parcourir
       </h2>
       <p class="dropzone__hint">
-        Vidéos, images, audio. Fichiers ou dossiers. Détection auto, conversion immédiate.
+        Vidéos, images, audio — compression pour le web en un drag.
       </p>
     </div>
   </button>
