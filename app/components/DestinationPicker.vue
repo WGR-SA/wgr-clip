@@ -20,8 +20,8 @@ const label = computed(() => {
     <UIcon
       name="i-lucide-folder-output"
       class="dest__icon"
+      title="Destination"
     />
-    <span class="dest__caption">Destination</span>
     <strong class="dest__label">{{ label }}</strong>
   </button>
 </template>

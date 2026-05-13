@@ -60,15 +60,15 @@ const meta = computed(() => kindMeta[props.kind])
     :items="items"
     :search-input="false"
     class="preset"
-    :ui="{ base: 'preset__trigger' }"
+    :ui="{ base: 'preset__trigger', content: 'preset__popover' }"
   >
     <template #default="{ modelValue }">
       <span class="preset__value">
         <UIcon
           :name="meta.icon"
           class="preset__icon"
+          :title="meta.caption"
         />
-        <span class="preset__caption">{{ meta.caption }}</span>
         <strong class="preset__label">{{ modelValue.label }}</strong>
       </span>
     </template>
@@ -137,5 +137,11 @@ const meta = computed(() => kindMeta[props.kind])
   font-size: 0.72rem;
   color: #888;
   line-height: 1.3;
+}
+
+/* The Reka popover defaults to match the trigger width — way too narrow
+   for our compact pill triggers. Force a sensible reading width. */
+:global(.preset__popover) {
+  min-width: 280px !important;
 }
 </style>

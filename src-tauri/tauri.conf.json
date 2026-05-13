@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "wgr-clip",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "identifier": "ch.wgr.clip",
   "build": {
     "frontendDist": "../.output/public",
@@ -14,10 +14,10 @@
       {
         "label": "main",
         "title": "wgr-clip",
-        "width": 940,
-        "height": 620,
-        "minWidth": 760,
-        "minHeight": 480,
+        "width": 760,
+        "height": 540,
+        "minWidth": 600,
+        "minHeight": 440,
         "resizable": true,
         "fullscreen": false,
         "decorations": true,

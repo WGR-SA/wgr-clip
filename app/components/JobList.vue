@@ -5,19 +5,58 @@ const hasJobs = computed(() => queue.jobs.value.length > 0)
 const hasFinished = computed(() =>
   queue.jobs.value.some(j => j.status.state === 'done' || j.status.state === 'cancelled')
 )
+const hasActive = computed(() => queue.counts.value.active > 0 || queue.counts.value.pending > 0)
+const overallPct = computed(() => Math.round(queue.counts.value.overall * 100))
+// SVG ring circumference at r=15.9 is ~99.9 → round to 100 for clean math.
+const ringDashOffset = computed(() => 100 - overallPct.value)
 </script>
 
 <template>
-  <section class="joblist">
+  <section
+    v-if="hasJobs"
+    class="joblist"
+  >
     <header class="joblist__head">
       <h3 class="joblist__title">
         File d'attente
       </h3>
-      <div class="joblist__counts">
-        <span><strong>{{ queue.counts.value.done }}</strong> terminés</span>
-        <span v-if="queue.counts.value.active > 0">·  <strong>{{ queue.counts.value.active }}</strong> en cours</span>
-        <span v-if="queue.counts.value.pending > 0">·  <strong>{{ queue.counts.value.pending }}</strong> en attente</span>
-        <span v-if="queue.counts.value.error > 0">·  <strong style="color:#ef4444">{{ queue.counts.value.error }}</strong> erreur(s)</span>
+      <div
+        class="joblist__counts"
+        :title="`${queue.counts.value.done} terminés · ${queue.counts.value.active} en cours · ${queue.counts.value.pending} en attente${queue.counts.value.error > 0 ? ' · ' + queue.counts.value.error + ' erreur(s)' : ''}`"
+      >
+        <strong>{{ queue.counts.value.done }}</strong>/<span>{{ queue.counts.value.total }}</span>
+        <span
+          v-if="queue.counts.value.error > 0"
+          class="joblist__counts-err"
+        >·  {{ queue.counts.value.error }} ⚠</span>
+      </div>
+      <div
+        v-if="hasActive"
+        class="joblist__ring"
+        :title="`${overallPct}%`"
+      >
+        <svg viewBox="0 0 36 36">
+          <circle
+            class="joblist__ring-track"
+            cx="18"
+            cy="18"
+            r="15.915"
+            fill="none"
+            stroke-width="3.5"
+          />
+          <circle
+            class="joblist__ring-fill"
+            cx="18"
+            cy="18"
+            r="15.915"
+            fill="none"
+            stroke-width="3.5"
+            stroke-dasharray="100"
+            :stroke-dashoffset="ringDashOffset"
+            stroke-linecap="round"
+          />
+        </svg>
+        <span class="joblist__ring-text">{{ overallPct }}<small>%</small></span>
       </div>
       <UButton
         v-if="hasFinished"
@@ -25,28 +64,29 @@ const hasFinished = computed(() =>
         color="neutral"
         variant="ghost"
         icon="i-lucide-eraser"
+        aria-label="Effacer les terminés"
+        title="Effacer les terminés"
         @click="queue.clearFinished()"
-      >
-        Effacer les terminés
-      </UButton>
+      />
+      <UButton
+        v-if="hasActive"
+        size="xs"
+        color="neutral"
+        variant="soft"
+        icon="i-lucide-circle-stop"
+        aria-label="Tout annuler"
+        title="Tout annuler"
+        @click="queue.cancelAll()"
+      />
     </header>
 
-    <ul
-      v-if="hasJobs"
-      class="joblist__items"
-    >
+    <ul class="joblist__items">
       <JobRow
         v-for="job in queue.jobs.value"
         :key="job.id"
         :job="job"
       />
     </ul>
-    <div
-      v-else
-      class="joblist__empty"
-    >
-      Aucun fichier pour le moment. Déposez une vidéo pour commencer.
-    </div>
   </section>
 </template>
 
@@ -72,11 +112,61 @@ const hasFinished = computed(() =>
 }
 
 .joblist__counts {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #a8a8a8;
-  display: flex;
-  gap: 0.4rem;
+  font-variant-numeric: tabular-nums;
   margin-right: auto;
+  white-space: nowrap;
+
+  strong {
+    color: #FDF7F1;
+  }
+}
+
+.joblist__counts-err {
+  color: #ef4444;
+  margin-left: 0.35rem;
+}
+
+.joblist__ring {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+}
+
+.joblist__ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.joblist__ring-track {
+  stroke: #2a2a2a;
+}
+
+.joblist__ring-fill {
+  stroke: var(--color-icterine-400);
+  transition: stroke-dashoffset 200ms linear;
+}
+
+.joblist__ring-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #d4d4d4;
+  line-height: 1;
+}
+
+.joblist__ring-text small {
+  font-size: 0.55em;
+  opacity: 0.65;
+  margin-left: 0.5px;
 }
 
 .joblist__items {

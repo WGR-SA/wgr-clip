@@ -1,9 +1,5 @@
 <script setup lang="ts">
 useHead({ title: 'wgr-clip' })
-
-const queue = useTranscodeQueue()
-const showGlobalProgress = computed(() => queue.counts.value.total > 0 && (queue.counts.value.active > 0 || queue.counts.value.pending > 0))
-const overallPct = computed(() => Math.round(queue.counts.value.overall * 100))
 </script>
 
 <template>
@@ -31,22 +27,6 @@ const overallPct = computed(() => Math.round(queue.counts.value.overall * 100))
 
     <DropZone />
 
-    <GlobalToolbar />
-
-    <div
-      v-if="showGlobalProgress"
-      class="page__global-progress"
-      role="progressbar"
-      :aria-valuenow="overallPct"
-      aria-valuemin="0"
-      aria-valuemax="100"
-    >
-      <div
-        class="page__global-progress-fill"
-        :style="{ width: `${overallPct}%` }"
-      />
-    </div>
-
     <JobList />
   </div>
 </template>
@@ -56,7 +36,7 @@ const overallPct = computed(() => Math.round(queue.counts.value.overall * 100))
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  max-width: 1100px;
+  max-width: 900px;
   margin: 0 auto;
   width: 100%;
 }
@@ -91,19 +71,5 @@ const overallPct = computed(() => Math.round(queue.counts.value.overall * 100))
   gap: 0.4rem;
   align-items: center;
   flex-wrap: wrap;
-}
-
-.page__global-progress {
-  height: 4px;
-  background: #2a2a2a;
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.page__global-progress-fill {
-  height: 100%;
-  background: var(--color-icterine-400);
-  transition: width 200ms linear;
-  border-radius: 999px;
 }
 </style>

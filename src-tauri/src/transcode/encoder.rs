@@ -58,24 +58,82 @@ pub async fn run_job(
             return Err(e);
         }
     };
+
+    // Try hardware first; on FfmpegCrashed for video, fall back to libx264.
+    // (Image / audio paths don't use the h264 hw encoder so the retry never
+    // fires for them.)
+    let attempt = try_encode(&app, job_id, input, output, preset, kind, custom, hw, &cancel, &probed).await;
+
+    match attempt {
+        Ok(outcome) => Ok(outcome),
+        Err((JobError::Cancelled, _)) => Err(JobError::Cancelled),
+        Err((JobError::FfmpegCrashed { exit_code, stderr_tail }, tail_vec))
+            if kind == MediaKind::Video && hw != HwAccel::Software =>
+        {
+            log::warn!(
+                target: "transcode",
+                "hw encoder {hw:?} crashed (exit {exit_code}) on job {job_id} — retrying with libx264"
+            );
+            cleanup_partial(output).await;
+            match try_encode(&app, job_id, input, output, preset, kind, custom, HwAccel::Software, &cancel, &probed).await {
+                Ok(outcome) => Ok(outcome),
+                Err((e, tail)) => {
+                    let _ = stderr_tail;
+                    let _ = tail_vec;
+                    cleanup_partial(output).await;
+                    emit_error(&app, job_id, e.clone(), tail);
+                    Err(e)
+                }
+            }
+        }
+        Err((e, tail_vec)) => {
+            cleanup_partial(output).await;
+            emit_error(&app, job_id, e.clone(), tail_vec);
+            Err(e)
+        }
+    }
+}
+
+/// One encode attempt. Returns `Ok(outcome)` on exit code 0 (emits done event),
+/// `Err((Cancelled, []))` if cancelled (emits cancelled event, cleans up),
+/// or `Err((classified_error, stderr_tail))` on non-zero exit — without
+/// emitting EV_ERROR, so the caller can decide whether to retry.
+async fn try_encode(
+    app: &AppHandle,
+    job_id: Uuid,
+    input: &Path,
+    output: &Path,
+    preset: Preset,
+    kind: MediaKind,
+    custom: Option<CustomParams>,
+    hw: HwAccel,
+    cancel: &CancellationToken,
+    probed: &crate::transcode::probe::ProbeResult,
+) -> Result<EncodeOutcome, (JobError, Vec<String>)> {
     let duration_us = probed.duration_us;
-
-    // 2. Build ffmpeg argv
     let args = build_args(kind, preset, hw, input, output, probed.height, custom);
-    log::info!(target: "transcode", "ffmpeg argv for job {job_id}: {args:?}");
+    log::info!(target: "transcode", "ffmpeg argv ({hw:?}) for job {job_id}: {args:?}");
 
-    // 3. Spawn
-    let cmd = app
-        .shell()
-        .sidecar("ffmpeg")
-        .map_err(|e| JobError::Internal(format!("ffmpeg sidecar unavailable: {e}")))?
-        .args(args.clone());
+    let cmd = match app.shell().sidecar("ffmpeg") {
+        Ok(c) => c.args(args.clone()),
+        Err(e) => {
+            return Err((
+                JobError::Internal(format!("ffmpeg sidecar unavailable: {e}")),
+                Vec::new(),
+            ));
+        }
+    };
 
-    let (mut rx, child) = cmd
-        .spawn()
-        .map_err(|e| JobError::Internal(format!("ffmpeg spawn failed: {e}")))?;
+    let (mut rx, child) = match cmd.spawn() {
+        Ok(v) => v,
+        Err(e) => {
+            return Err((
+                JobError::Internal(format!("ffmpeg spawn failed: {e}")),
+                Vec::new(),
+            ));
+        }
+    };
 
-    // 4. Multiplex events
     let mut stderr_tail: VecDeque<String> = VecDeque::with_capacity(STDERR_TAIL_LINES);
     let mut stdout_buffer = String::new();
     let mut last_emit = Instant::now() - Duration::from_millis(PROGRESS_DEBOUNCE_MS + 1);
@@ -94,7 +152,6 @@ pub async fn run_job(
 
             _ = cancel.cancelled() => {
                 let _ = child.kill();
-                // Drain remaining events briefly so the child is fully reaped
                 let drain_deadline = Instant::now() + Duration::from_millis(500);
                 while Instant::now() < drain_deadline {
                     match tokio::time::timeout(Duration::from_millis(50), rx.recv()).await {
@@ -103,8 +160,8 @@ pub async fn run_job(
                     }
                 }
                 cleanup_partial(output).await;
-                emit_cancelled(&app, job_id);
-                return Err(JobError::Cancelled);
+                emit_cancelled(app, job_id);
+                return Err((JobError::Cancelled, Vec::new()));
             }
 
             ev = rx.recv() => {
@@ -115,7 +172,7 @@ pub async fn run_job(
                             &mut stdout_buffer,
                             duration_us,
                             &mut last_tick,
-                            &app,
+                            app,
                             job_id,
                             &mut last_emit,
                         );
@@ -146,7 +203,6 @@ pub async fn run_job(
 
     match exit_code {
         Some(0) => {
-            // Final tick at 100%
             let final_tick = ProgressTick {
                 job_id,
                 percent: 1.0,
@@ -162,22 +218,10 @@ pub async fn run_job(
                     output: output.to_path_buf(),
                 },
             );
-            Ok(EncodeOutcome {
-                stderr_tail: stderr_tail_vec,
-            })
+            Ok(EncodeOutcome { stderr_tail: stderr_tail_vec })
         }
-        Some(code) => {
-            let err = classify_error(code, &stderr_tail_vec);
-            cleanup_partial(output).await;
-            emit_error(&app, job_id, err.clone(), stderr_tail_vec.clone());
-            Err(err)
-        }
-        None => {
-            let err = JobError::Internal("ffmpeg exited without status".into());
-            cleanup_partial(output).await;
-            emit_error(&app, job_id, err.clone(), stderr_tail_vec.clone());
-            Err(err)
-        }
+        Some(code) => Err((classify_error(code, &stderr_tail_vec), stderr_tail_vec)),
+        None => Err((JobError::Internal("ffmpeg exited without status".into()), stderr_tail_vec)),
     }
 }
 

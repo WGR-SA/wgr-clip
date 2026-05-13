@@ -82,17 +82,16 @@ fn video_args(
             } else {
                 videotoolbox_bitrate_kbps(preset, input_height)
             };
+            // Minimal VideoToolbox args — earlier we set -maxrate / -bufsize /
+            // -realtime which some inputs (specific MOV containers, 10-bit
+            // sources, unusual SAR) rejected with VTPropertyNotSupportedErr.
+            // -allow_sw 1 keeps the software fallback available; the encoder.rs
+            // retry-with-libx264 path catches anything that still slips through.
             a.extend([
                 "-b:v".into(),
                 format!("{bitrate}k"),
-                "-maxrate".into(),
-                format!("{}k", (bitrate as f32 * 1.45) as u32),
-                "-bufsize".into(),
-                format!("{}k", bitrate * 2),
                 "-allow_sw".into(),
                 "1".into(),
-                "-realtime".into(),
-                "0".into(),
             ]);
         }
         "h264_nvenc" => {
