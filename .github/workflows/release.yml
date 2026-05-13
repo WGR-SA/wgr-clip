@@ -189,3 +189,16 @@ jobs:
           $latestPath = "deploy/latest.json"
           ($latest | ConvertTo-Json -Depth 10) | Out-File $latestPath -Encoding utf8
           gh release upload "$env:TAG" "$latestPath" --clobber
+
+  publish:
+    # Wait for both mac + win jobs to upload all signed artifacts and the
+    # patched latest.json, then flip the draft to published so the wgr.ch
+    # download page sees the assets via /releases/latest.
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: gh release edit "$TAG" --draft=false --repo "${{ github.repository }}"
