@@ -19,15 +19,15 @@ const itemsByKind: Record<MediaKind, PresetOption[]> = {
     { value: 'custom', label: 'Personnalisé…', hint: 'Définir résolution / qualité' }
   ],
   image: [
-    { value: 'source', label: 'Original', hint: 'Garde les dimensions, recompresse JPEG q92' },
-    { value: 'web1080p', label: 'Web 2000px', hint: 'Cap 2000px, JPEG q85' },
-    { value: '4k', label: 'HD 4000px', hint: 'Cap 4000px, JPEG q90' },
+    { value: 'source', label: 'Original', hint: 'Garde les dimensions, JPEG q88' },
+    { value: 'web1080p', label: 'Web 2000px', hint: 'Cap 2000px, JPEG q80' },
+    { value: '4k', label: 'HD 4000px', hint: 'Cap 4000px, JPEG q88' },
     { value: 'custom', label: 'Personnalisé…', hint: 'Définir taille / qualité' }
   ],
   audio: [
-    { value: 'source', label: 'Standard 192k', hint: 'MP3 192k — qualité standard' },
-    { value: 'web1080p', label: 'Web 128k', hint: 'MP3 128k — compact pour upload' },
-    { value: '4k', label: 'HQ 256k', hint: 'MP3 256k — haute qualité' },
+    { value: 'source', label: 'Standard 128k', hint: 'MP3 128k — qualité standard' },
+    { value: 'web1080p', label: 'Web 96k', hint: 'MP3 96k — compact pour upload' },
+    { value: '4k', label: 'HQ 192k', hint: 'MP3 192k — haute qualité' },
     { value: 'custom', label: 'Personnalisé…', hint: 'Définir le bitrate MP3' }
   ]
 }

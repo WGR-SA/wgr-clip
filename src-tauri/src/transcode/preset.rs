@@ -243,11 +243,17 @@ fn image_args(preset: Preset, input: &Path, output: &Path, custom: Option<Custom
         Preset::Source => 0,
         Preset::Custom => custom.map(|c| c.image_max_dim).unwrap_or(0),
     };
-    // mjpeg q:v scale. ~3 = visually lossless, 5 = good web, 7 = compact.
+    // mjpeg q:v scale (lower = better, 1..31):
+    //   2 ≈ JPEG q95 (visually lossless, often BIGGER than a source q80 photo)
+    //   4 ≈ JPEG q88 (web-grade, usually smaller than typical sources)
+    //   6 ≈ JPEG q80 (compact web upload)
+    //   8 ≈ JPEG q70 (aggressive)
+    // Source should still produce a smaller file than a phone-camera JPEG; q=4
+    // is the right balance (high quality + actual size win).
     let q: String = match preset {
-        Preset::Web1080p => "5".into(),
-        Preset::FourK => "3".into(),
-        Preset::Source => "2".into(),
+        Preset::Web1080p => "6".into(),
+        Preset::FourK => "4".into(),
+        Preset::Source => "4".into(),
         Preset::Custom => {
             let q100 = custom.map(|c| c.image_quality).unwrap_or(85).clamp(1, 100);
             // q100 100 → mjpeg q 1 ; q100 1 → mjpeg q 31
@@ -294,12 +300,16 @@ fn image_args(preset: Preset, input: &Path, output: &Path, custom: Option<Custom
 /// Audio args: MP3 (LAME) — universal compatibility, recognised by every
 /// player and CMS. Strip cover-art video stream so the muxer doesn't choke.
 fn audio_args(preset: Preset, input: &Path, output: &Path, custom: Option<CustomParams>) -> Vec<String> {
+    // MP3 bitrates. Web/Source defaults aimed at "still smaller than the most
+    // common source": phone voice memos (m4a 64k), podcasts (mp3 128k), WAV
+    // recordings (10× shrink at any bitrate). 192k as Source pushed past the
+    // typical 128k MP3 input; 96/128 lands consistently smaller.
     let bitrate: String = match preset {
-        Preset::Web1080p => "128k".into(),
-        Preset::FourK => "256k".into(),
-        Preset::Source => "192k".into(),
+        Preset::Web1080p => "96k".into(),
+        Preset::FourK => "192k".into(),
+        Preset::Source => "128k".into(),
         Preset::Custom => {
-            let kbps = custom.map(|c| c.audio_kbps).unwrap_or(192).clamp(32, 320);
+            let kbps = custom.map(|c| c.audio_kbps).unwrap_or(128).clamp(32, 320);
             format!("{kbps}k")
         }
     };
