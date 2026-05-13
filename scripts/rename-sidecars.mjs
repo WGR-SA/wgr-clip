@@ -33,27 +33,30 @@ if (process.env.CI && process.env.WGR_CLIP_FETCH_FFMPEG !== '1' && process.env.n
   process.exit(0)
 }
 
-// All sources are now static prebuilt binaries from the @ffmpeg-installer /
-// @ffprobe-installer npm packages. They link only against system frameworks,
-// so they Just Work in a bundled, unsigned mac/win app — no /opt/homebrew
-// dylib references that would dangle on a fresh client machine.
+// Sources upgraded to current ffmpeg (7.x / 8.x). All builds are statically
+// linked so they Just Work in a bundled unsigned app.
+//   - macOS arm64 → osxexperts.net 7.1.1 (no current evermeet arm64 endpoint)
+//   - macOS x64   → evermeet.cx (rolling latest, currently 8.1.1)
+//   - Windows x64 → BtbN/FFmpeg-Builds master-latest, GPL (libx264 + nvenc + qsv)
+// The arm64/x64 version drift inside the lipo binary is fine — each macOS host
+// executes only the slice that matches its CPU.
+const OSXEXPERTS_VERSION_TAG = '711' // bump when osxexperts ships 7.1.2 etc.
 const SOURCES = {
   'aarch64-apple-darwin': {
-    kind: 'npm',
-    ffmpegPkg: '@ffmpeg-installer/darwin-arm64',
-    ffprobePkg: '@ffprobe-installer/darwin-arm64',
+    kind: 'osxexperts',
+    ffmpegUrl: `https://www.osxexperts.net/ffmpeg${OSXEXPERTS_VERSION_TAG}arm.zip`,
+    ffprobeUrl: `https://www.osxexperts.net/ffprobe${OSXEXPERTS_VERSION_TAG}arm.zip`,
     ext: ''
   },
   'x86_64-apple-darwin': {
-    kind: 'npm',
-    ffmpegPkg: '@ffmpeg-installer/darwin-x64',
-    ffprobePkg: '@ffprobe-installer/darwin-x64',
+    kind: 'evermeet',
+    ffmpegUrl: 'https://evermeet.cx/ffmpeg/getrelease/zip',
+    ffprobeUrl: 'https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip',
     ext: ''
   },
   'x86_64-pc-windows-msvc': {
-    kind: 'npm',
-    ffmpegPkg: '@ffmpeg-installer/win32-x64',
-    ffprobePkg: '@ffprobe-installer/win32-x64',
+    kind: 'btbn',
+    archiveUrl: 'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip',
     ext: '.exe'
   }
 }
@@ -102,39 +105,35 @@ function verifyBinary (path) {
   console.log(`[fetch-ffmpeg]   ✓ ${(r.stdout || '').split('\n')[0]}`)
 }
 
-function copyNpmBinaries (triple, ext, ffmpegPkg, ffprobePkg) {
-  // Locate `<pkg>/<tool>(.exe)` inside node_modules. Each @ffmpeg-installer
-  // / @ffprobe-installer subpackage ships a single statically-linked binary
-  // matching the package's platform.
-  const pairs = [
-    { tool: 'ffmpeg', pkg: ffmpegPkg },
-    { tool: 'ffprobe', pkg: ffprobePkg }
-  ]
-  for (const { tool, pkg } of pairs) {
-    const candidates = [
-      join(ROOT, 'node_modules', pkg, `${tool}${ext}`),
-      join(ROOT, 'node_modules', pkg, tool)
-    ]
-    const src = candidates.find(p => existsSync(p))
-    if (!src) {
-      throw new Error(`${tool} not found in node_modules/${pkg}. Did \`npm install\` run?`)
-    }
-    const dest = join(BIN_DIR, `${tool}-${triple}${ext}`)
-    copyFileSync(src, dest)
-    chmodSync(dest, 0o755)
-    // Skip verifyBinary on cross-platform sidecars (e.g. fetching the
-    // Windows binary from a macOS host). Only run -version when the binary
-    // matches the host arch/OS.
-    const isHost = (
-      (process.platform === 'darwin' && triple.endsWith('-apple-darwin') && (
-        (process.arch === 'arm64' && triple.startsWith('aarch64')) ||
-        (process.arch === 'x64' && triple.startsWith('x86_64'))
-      )) ||
-      (process.platform === 'win32' && triple === 'x86_64-pc-windows-msvc')
-    )
-    if (isHost) verifyBinary(dest)
-    else console.log(`[fetch-ffmpeg]   ✓ copied ${pkg}/${tool}${ext} (cross-platform, no verify)`)
-  }
+function isHostTriple (triple) {
+  return (
+    (process.platform === 'darwin' && triple.endsWith('-apple-darwin') && (
+      (process.arch === 'arm64' && triple.startsWith('aarch64')) ||
+      (process.arch === 'x64' && triple.startsWith('x86_64'))
+    )) ||
+    (process.platform === 'win32' && triple === 'x86_64-pc-windows-msvc')
+  )
+}
+
+async function downloadAndExtract (url, work) {
+  mkdirSync(work, { recursive: true })
+  const archive = join(work, 'archive.zip')
+  await download(url, archive)
+  if (statSync(archive).size < 1024) throw new Error(`Archive suspiciously small (${statSync(archive).size}B) — got HTML?`)
+  extractZip(archive, work)
+}
+
+function placeBinary (foundPath, triple, tool, ext) {
+  const dest = join(BIN_DIR, `${tool}-${triple}${ext}`)
+  chmodSync(foundPath, 0o755)
+  // copy+unlink instead of rename — GH Windows runners place TMP on C: and
+  // the workspace on D:, which makes fs.rename throw EXDEV.
+  copyFileSync(foundPath, dest)
+  rmSync(foundPath, { force: true })
+  chmodSync(dest, 0o755)
+  if (isHostTriple(triple)) verifyBinary(dest)
+  else console.log(`[fetch-ffmpeg]   ✓ placed ${tool}-${triple}${ext} (cross-platform, no -version run)`)
+  return dest
 }
 
 async function fetchTriple (triple) {
@@ -146,65 +145,46 @@ async function fetchTriple (triple) {
   if (expected.every(p => existsSync(p))) {
     let allOk = true
     for (const p of expected) {
-      try { verifyBinary(p) } catch { allOk = false }
+      try { if (isHostTriple(triple)) verifyBinary(p) } catch { allOk = false }
     }
     if (allOk) {
-      console.log(`[fetch-ffmpeg] ${triple}: both binaries present and valid — skip.`)
+      console.log(`[fetch-ffmpeg] ${triple}: both binaries present — skip.`)
       return
     }
-    console.log(`[fetch-ffmpeg] ${triple}: existing binaries broken — refetch.`)
     for (const p of expected) rmSync(p, { force: true })
   }
 
-  if (src.kind === 'npm') {
-    console.log(`[fetch-ffmpeg] ${triple}: copying from ${src.ffmpegPkg} + ${src.ffprobePkg}`)
-    copyNpmBinaries(triple, ext, src.ffmpegPkg, src.ffprobePkg)
-    return
-  }
-
-  // Single-archive case (Windows BtbN ships both binaries in one zip)
-  if (!src.ffprobe) {
+  if (src.kind === 'btbn') {
+    // BtbN ships ffmpeg.exe + ffprobe.exe inside a single zip under bin/.
+    console.log(`[fetch-ffmpeg] ${triple}: BtbN ${src.archiveUrl}`)
     const work = join(tmpdir(), `wgr-clip-fetch-${triple}-${Date.now()}`)
-    mkdirSync(work, { recursive: true })
-    const archive = join(work, 'archive.zip')
-    await download(src.ffmpeg, archive)
-    if (statSync(archive).size < 1024) throw new Error(`Archive too small: ${statSync(archive).size}B`)
-    extractZip(archive, work)
+    await downloadAndExtract(src.archiveUrl, work)
     for (const tool of ['ffmpeg', 'ffprobe']) {
       const found = findBinary(work, tool)
-      if (!found) throw new Error(`${tool} not found inside archive`)
-      const dest = join(BIN_DIR, `${tool}-${triple}${ext}`)
-      chmodSync(found, 0o755)
-      // copy+unlink instead of rename — GH Windows runners place temp on C:
-      // and the workspace on D:, which makes rename throw EXDEV.
-      copyFileSync(found, dest)
-      rmSync(found, { force: true })
-      chmodSync(dest, 0o755)
-      verifyBinary(dest)
+      if (!found) throw new Error(`${tool} not found inside BtbN archive`)
+      placeBinary(found, triple, tool, ext)
     }
     rmSync(work, { recursive: true, force: true })
     return
   }
 
-  // Two-archive case (evermeet ships ffmpeg and ffprobe separately)
-  for (const tool of ['ffmpeg', 'ffprobe']) {
-    const url = src[tool]
-    const work = join(tmpdir(), `wgr-clip-fetch-${tool}-${triple}-${Date.now()}`)
-    mkdirSync(work, { recursive: true })
-    const archive = join(work, 'archive.zip')
-    await download(url, archive)
-    if (statSync(archive).size < 1024) throw new Error(`Archive too small: ${statSync(archive).size}B`)
-    extractZip(archive, work)
-    const found = findBinary(work, tool)
-    if (!found) throw new Error(`${tool} not found inside ${url}`)
-    const dest = join(BIN_DIR, `${tool}-${triple}${ext}`)
-    chmodSync(found, 0o755)
-    copyFileSync(found, dest)
-    rmSync(found, { force: true })
-    chmodSync(dest, 0o755)
-    verifyBinary(dest)
-    rmSync(work, { recursive: true, force: true })
+  // Both osxexperts and evermeet ship one tool per zip → fetch ffmpeg + ffprobe
+  // separately.
+  if (src.kind === 'osxexperts' || src.kind === 'evermeet') {
+    console.log(`[fetch-ffmpeg] ${triple}: ${src.kind} → ${src.ffmpegUrl}`)
+    for (const tool of ['ffmpeg', 'ffprobe']) {
+      const url = tool === 'ffmpeg' ? src.ffmpegUrl : src.ffprobeUrl
+      const work = join(tmpdir(), `wgr-clip-fetch-${tool}-${triple}-${Date.now()}`)
+      await downloadAndExtract(url, work)
+      const found = findBinary(work, tool)
+      if (!found) throw new Error(`${tool} not found inside ${url}`)
+      placeBinary(found, triple, tool, ext)
+      rmSync(work, { recursive: true, force: true })
+    }
+    return
   }
+
+  throw new Error(`Unknown source kind ${src.kind} for ${triple}`)
 }
 
 /**
