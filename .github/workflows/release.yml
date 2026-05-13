@@ -6,6 +6,13 @@ on:
       - "v*"
   workflow_dispatch:
 
+# Only one release build at a time across all tags — pushing v0.1.4 while
+# v0.1.3 is still building cancels v0.1.3 immediately. Saves runner minutes
+# and avoids racy concurrent draft creation on the same repo.
+concurrency:
+  group: release
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
