@@ -143,7 +143,7 @@ jobs:
           $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
           cmd /c "npx tauri signer sign --private-key ""%TAURI_SIGNING_PRIVATE_KEY%"" --password """" ""${{ steps.findexe.outputs.EXE }}"""
 
-      - name: Patch GitHub Release with signed EXE + updated latest.json
+      - name: Replace unsigned EXE + sig on draft release
         if: matrix.os == 'windows-latest' && steps.findexe.outputs.SKIP != '1'
         shell: pwsh
         env:
@@ -151,56 +151,76 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           $exe = "${{ steps.findexe.outputs.EXE }}"
-          $exeName = "${{ steps.findexe.outputs.EXENAME }}"
           $sig = "$exe.sig"
           if (-not (Test-Path $sig)) { $sig = "$exe.minisig" }
           if (-not (Test-Path $sig)) { Write-Error "Minisig not found next to EXE"; exit 1 }
-          $signature = (Get-Content $sig -Raw).Trim()
-          $version = "${{ steps.tauri.outputs.appVersion }}"
-
-          # Replace the unsigned EXE asset and its .sig on the draft release.
+          # Replace the unsigned EXE + its .sig on the draft. The final
+          # cross-platform latest.json is rebuilt by the publish job below.
           gh release upload "$env:TAG" "$exe" --clobber
           gh release upload "$env:TAG" "$sig" --clobber
 
-          # Compose latest.json so the updater verifies the SIGNED bytes.
-          $latest = @{
-            version = $version
-            notes = "wgr-clip v$version"
-            pub_date = (Get-Date).ToString("yyyy-MM-ddTHH:mm:ssZ")
-            platforms = @{
-              'windows-x86_64' = @{
-                signature = $signature
-                url = "https://github.com/${{ github.repository }}/releases/download/$env:TAG/$exeName"
-              }
-            }
-          }
-          # If macOS already published a latest.json on this release, merge its
-          # darwin platform entries so a single file covers both OSes.
-          $existing = gh release view "$env:TAG" --json assets --jq '.assets[] | select(.name=="latest.json") | .url' 2>$null
-          if ($existing) {
-            try {
-              $existingJson = (Invoke-WebRequest -Uri $existing -UseBasicParsing).Content | ConvertFrom-Json
-              if ($existingJson.platforms) {
-                foreach ($k in $existingJson.platforms.PSObject.Properties.Name) {
-                  if ($k -ne 'windows-x86_64') {
-                    $latest.platforms[$k] = $existingJson.platforms.$k
-                  }
-                }
-              }
-            } catch { Write-Host "No mergeable latest.json yet — writing fresh one." }
-          }
-          New-Item -ItemType Directory -Force -Path "deploy" | Out-Null
-          $latestPath = "deploy/latest.json"
-          ($latest | ConvertTo-Json -Depth 10) | Out-File $latestPath -Encoding utf8
-          gh release upload "$env:TAG" "$latestPath" --clobber
-
   publish:
-    # Wait for both mac + win jobs to upload all signed artifacts and the
-    # patched latest.json, then flip the draft to published so the wgr.ch
-    # download page sees the assets via /releases/latest.
+    # Rebuilds latest.json from BOTH platforms' .sig files (authoritative
+    # source) and then flips the draft to published. tauri-action and the
+    # Windows post-sign step each upload their own latest.json that clobbers
+    # the other, so we ignore both and reconstruct from the signature files.
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Rebuild latest.json with all platforms
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          mkdir -p sigs && cd sigs
+
+          # Pull every sig file from the draft release (mac .app.tar.gz.sig +
+          # win exe.sig). gh release download follows the right Accept headers
+          # for asset binaries, unlike Invoke-WebRequest on the API .url field.
+          gh release download "$TAG" --repo "$REPO" --pattern "*.sig" || true
+          ls -la
+
+          MAC_SIG_FILE=$(ls -1 wgr-clip_universal.app.tar.gz.sig 2>/dev/null || true)
+          WIN_SIG_FILE=$(ls -1 *_x64-setup.exe.sig 2>/dev/null || true)
+
+          if [ -z "$MAC_SIG_FILE" ] && [ -z "$WIN_SIG_FILE" ]; then
+            echo "No platform signatures found — cannot build latest.json"
+            exit 1
+          fi
+
+          PLATFORMS=""
+          if [ -n "$MAC_SIG_FILE" ]; then
+            MAC_SIG=$(tr -d '\n' < "$MAC_SIG_FILE" | sed 's/"/\\"/g')
+            MAC_URL="https://github.com/${REPO}/releases/download/${TAG}/wgr-clip_universal.app.tar.gz"
+            # Tauri updater on macOS keys both architectures to the universal bundle.
+            PLATFORMS+=$'"darwin-x86_64":{"signature":"'"$MAC_SIG"$'","url":"'"$MAC_URL"$'"},'
+            PLATFORMS+=$'"darwin-aarch64":{"signature":"'"$MAC_SIG"$'","url":"'"$MAC_URL"$'"}'
+          fi
+          if [ -n "$WIN_SIG_FILE" ]; then
+            WIN_EXE_NAME="${WIN_SIG_FILE%.sig}"
+            WIN_SIG=$(tr -d '\n' < "$WIN_SIG_FILE" | sed 's/"/\\"/g')
+            WIN_URL="https://github.com/${REPO}/releases/download/${TAG}/${WIN_EXE_NAME}"
+            [ -n "$PLATFORMS" ] && PLATFORMS+=","
+            PLATFORMS+=$'"windows-x86_64":{"signature":"'"$WIN_SIG"$'","url":"'"$WIN_URL"$'"}'
+          fi
+
+          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          cat > latest.json <<EOF
+          {
+            "version": "${VERSION}",
+            "notes": "wgr-clip ${TAG}",
+            "pub_date": "${PUB_DATE}",
+            "platforms": { ${PLATFORMS} }
+          }
+          EOF
+          cat latest.json
+          gh release upload "$TAG" latest.json --clobber --repo "$REPO"
+
       - name: Publish release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
