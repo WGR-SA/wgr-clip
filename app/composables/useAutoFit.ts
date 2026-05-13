@@ -14,7 +14,7 @@ import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window'
  *   window never grows off-screen on small displays
  */
 const MAX_HEIGHT = 1100
-const MIN_OUTER_HEIGHT = 440
+const MIN_OUTER_HEIGHT = 286
 const FIT_TIMEOUT_MS = 120
 // Extra room appended to the measured content height so the footer never
 // gets clipped when fonts settle a fraction of a pixel after layout.

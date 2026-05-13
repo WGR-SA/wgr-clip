@@ -20,27 +20,31 @@ useBatchNotification()
       ref="shellRef"
       class="shell"
     >
-      <main class="shell__main">
-        <NuxtPage />
-      </main>
-      <AppFooter />
+      <div class="shell__inner">
+        <main class="shell__main">
+          <NuxtPage />
+        </main>
+        <AppFooter />
+      </div>
     </div>
   </UApp>
 </template>
 
 <style scoped>
 .shell {
+  background: #232323;
+}
+
+/* Single column shared by main + footer so every element lines up to the
+   same left/right edges regardless of how wide the user resizes the window. */
+.shell__inner {
   display: flex;
   flex-direction: column;
-  background: #232323;
-  /* No min-height: 100vh — let the content + footer determine the height
-     so useAutoFit can resize the window down to fit when the queue is empty. */
 }
 
 .shell__main {
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
 }
 </style>

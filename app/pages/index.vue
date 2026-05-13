@@ -4,16 +4,14 @@ useHead({ title: 'wgr-clip' })
 
 <template>
   <div class="page">
-    <header class="page__header">
+    <UpdateBanner />
+
+    <!-- Title + settings pills share the top row. clip on the left, controls
+         flowing right; settings wrap to a second line on narrow windows. -->
+    <section class="page__topbar">
       <h1 class="page__title">
         clip
       </h1>
-    </header>
-
-    <UpdateBanner />
-
-    <!-- Settings: compact always-visible pills. Click any to change inline. -->
-    <section class="page__settings">
       <PresetSelector kind="video" />
       <PresetSelector kind="image" />
       <PresetSelector kind="audio" />
@@ -32,34 +30,24 @@ useHead({ title: 'wgr-clip' })
 .page {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  max-width: 900px;
-  margin: 0 auto;
+  gap: 0.75rem;
   width: 100%;
 }
 
-.page__header {
+.page__topbar {
   display: flex;
-  align-items: baseline;
-  gap: 0.65rem;
+  align-items: center;
+  gap: 0.4rem;
   flex-wrap: wrap;
-  margin-bottom: 0.25rem;
 }
 
 .page__title {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 2rem;
+  font-size: 1.65rem;
   letter-spacing: -0.02em;
   line-height: 1;
   color: #FDF7F1;
-  margin: 0;
-}
-
-.page__settings {
-  display: flex;
-  gap: 0.4rem;
-  align-items: center;
-  flex-wrap: wrap;
+  margin: 0 auto 0 0; /* push following pills to the right edge */
 }
 </style>

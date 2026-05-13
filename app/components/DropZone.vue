@@ -23,7 +23,7 @@ onMounted(async () => {
         if (paths.length === 0) {
           useToast().add({
             title: 'Drop vide',
-            description: 'Aucun chemin de fichier reçu — essayez un autre dossier.',
+            description: 'Aucun chemin de fichier reçu. Essayez un autre dossier.',
             color: 'warning'
           })
           return
@@ -72,7 +72,7 @@ onBeforeUnmount(() => {
         Déposez ou cliquez pour parcourir
       </h2>
       <p class="dropzone__hint">
-        Vidéos, images, audio — compression pour le web en un drag.
+        Vidéos, images, audio. Compression web en un drag.
       </p>
     </div>
   </button>
@@ -85,10 +85,10 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   width: 100%;
-  min-height: 220px;
-  padding: 2.5rem 2rem;
+  min-height: 160px;
+  padding: 1.5rem 1.25rem;
   border: 2px dashed #3a3a3a;
-  border-radius: 16px;
+  border-radius: 14px;
   background: #1c1c1c;
   cursor: pointer;
   color: inherit;
@@ -116,28 +116,29 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
   text-align: center;
 }
 
 .dropzone__icon {
-  width: 3rem;
-  height: 3rem;
+  width: 2rem;
+  height: 2rem;
   color: var(--color-icterine-400);
   opacity: 0.85;
+  margin-bottom: 0.15rem;
 }
 
 .dropzone__title {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 1.75rem;
+  font-size: 1.35rem;
   letter-spacing: -0.01em;
   color: #FDF7F1;
   margin: 0;
 }
 
 .dropzone__hint {
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   color: #a8a8a8;
   margin: 0;
 }

@@ -49,7 +49,7 @@ async function install () {
       class="updbanner__icon"
     />
     <div class="updbanner__msg">
-      Mise à jour disponible — <strong>v{{ update.version }}</strong>
+      Mise à jour disponible v<strong>{{ update.version }}</strong>
       <span
         v-if="error"
         class="updbanner__err"

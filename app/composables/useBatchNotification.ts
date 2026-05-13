@@ -43,7 +43,7 @@ export function useBatchNotification () {
         granted = r === 'granted'
       }
       if (!granted) return
-      const title = errors > 0 ? 'wgr-clip — terminé avec erreurs' : 'wgr-clip — terminé'
+      const title = errors > 0 ? 'wgr-clip · terminé avec erreurs' : 'wgr-clip · terminé'
       const body = errors > 0
         ? `${count} fichier(s) convertis · ${errors} erreur(s)`
         : `${count} fichier(s) convertis`

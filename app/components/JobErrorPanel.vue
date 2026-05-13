@@ -14,7 +14,7 @@ const humanMessage = computed(() => {
     case 'InputNotFound':
       return 'Le fichier source est introuvable. Il a peut-être été déplacé ou renommé.'
     case 'ProbeFailed':
-      return 'Impossible de lire les métadonnées de ce fichier — il est peut-être corrompu ou utilise un conteneur inhabituel.'
+      return 'Impossible de lire les métadonnées de ce fichier. Il est peut-être corrompu ou utilise un conteneur inhabituel.'
     case 'UnsupportedCodec':
       return 'Le codec ou le format à l\'intérieur du fichier n\'est pas pris en charge par cette version de ffmpeg.'
     case 'OutputWriteError':

@@ -25,9 +25,9 @@ const itemsByKind: Record<MediaKind, PresetOption[]> = {
     { value: 'custom', label: 'Personnalisé…', hint: 'Définir taille / qualité' }
   ],
   audio: [
-    { value: 'source', label: 'Standard 128k', hint: 'MP3 128k — qualité standard' },
-    { value: 'web1080p', label: 'Web 96k', hint: 'MP3 96k — compact pour upload' },
-    { value: '4k', label: 'HQ 192k', hint: 'MP3 192k — haute qualité' },
+    { value: 'source', label: 'Standard 128k', hint: 'MP3 128k, qualité standard' },
+    { value: 'web1080p', label: 'Web 96k', hint: 'MP3 96k, compact pour upload' },
+    { value: '4k', label: 'HQ 192k', hint: 'MP3 192k, haute qualité' },
     { value: 'custom', label: 'Personnalisé…', hint: 'Définir le bitrate MP3' }
   ]
 }

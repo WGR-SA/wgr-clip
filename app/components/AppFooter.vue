@@ -50,7 +50,7 @@ async function openSite () {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.65rem 1rem;
+  padding: 0.65rem 1.25rem; /* match .shell__main horizontal padding */
   border-top: 1px solid #2a2a2a;
   font-size: 0.78rem;
   color: #888;
