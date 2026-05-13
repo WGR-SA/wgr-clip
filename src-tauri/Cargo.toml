@@ -1,6 +1,6 @@
 [package]
 name = "wgr-clip"
-version = "0.2.5"
+version = "0.2.6"
 description = "Drag-drop video transcoder for the web — by WGR"
 authors = ["WGR SA <hello@wgr.ch>"]
 license = "MIT"
