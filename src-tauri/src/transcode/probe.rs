@@ -4,7 +4,12 @@ use std::path::Path;
 use tauri::AppHandle;
 use tauri_plugin_shell::{process::CommandEvent, ShellExt};
 
+/// Subset of ffprobe's JSON output that the encoder actually uses. The
+/// `has_audio` and `width` fields are populated but not consumed today —
+/// kept for diagnostics and likely future preset routing (e.g. audio-only
+/// vs muxed, square-crop image presets).
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ProbeResult {
     pub duration_us: u64,
     pub has_audio: bool,

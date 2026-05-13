@@ -9,11 +9,6 @@ use walkdir::WalkDir;
 
 const MAX_BATCH: usize = 10_000;
 
-#[derive(Debug, Deserialize)]
-pub struct JobInput {
-    pub input: PathBuf,
-}
-
 #[derive(Debug, Serialize)]
 pub struct AppInfo {
     pub version: String,
