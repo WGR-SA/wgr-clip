@@ -156,10 +156,20 @@ fn x264_preset(p: Preset) -> &'static str {
     }
 }
 
+/// CRF tuned for "compressed enough to be smaller than the source most of
+/// the time, still visually fine". CRF 22 was producing outputs as large as
+/// or larger than already-encoded H.264 inputs (screen recordings, modern
+/// camera MP4s) which defeated the whole point. Bumping these:
+///   - Web1080p: 24  (web upload, mild loss invisible at 1080p)
+///   - 4K     : 22  (high quality, still real compression vs source)
+///   - Source : 25  (keep dimensions but compress noticeably)
+///   - Custom : user-defined (clamped 15..32 elsewhere)
 fn x264_crf(p: Preset) -> String {
     match p {
-        Preset::FourK => "20".into(),
-        _ => "22".into(),
+        Preset::FourK => "22".into(),
+        Preset::Web1080p => "24".into(),
+        Preset::Source => "25".into(),
+        Preset::Custom => "22".into(), // fallback; real value comes from custom params
     }
 }
 
@@ -184,19 +194,27 @@ fn crf_to_kbps(crf: u32, output_height: u32) -> u32 {
     (bitrate_1080 * pixel_ratio).round().max(500.0) as u32
 }
 
+/// VideoToolbox bitrate ladder. Matches the libx264 CRF intent: aim for an
+/// output noticeably smaller than typical screen-recording / camera sources
+/// (which already ship 8-15 Mb/s at 1080p).
 fn videotoolbox_bitrate_kbps(preset: Preset, input_height: u32) -> u32 {
     let output_height: u32 = match preset {
         Preset::Web1080p => input_height.min(1080).max(1),
         Preset::FourK => input_height.min(2160).max(1),
-        Preset::Source | Preset::Custom => if input_height == 0 { 1080 } else { input_height },
+        // For Source we cap implicitly at 1080p ladder values even if the
+        // input is bigger — keeping the source resolution while still
+        // compressing means the bitrate per pixel goes down, not up.
+        Preset::Source | Preset::Custom => {
+            if input_height == 0 { 1080 } else { input_height.min(1080) }
+        }
     };
     match output_height {
-        h if h <= 480 => 1_500,
-        h if h <= 720 => 3_000,
-        h if h <= 1080 => 5_000,
-        h if h <= 1440 => 10_000,
-        h if h <= 2160 => 25_000,
-        _ => 40_000,
+        h if h <= 480 => 1_000,
+        h if h <= 720 => 2_000,
+        h if h <= 1080 => 3_500,
+        h if h <= 1440 => 6_000,
+        h if h <= 2160 => 15_000,
+        _ => 25_000,
     }
 }
 
