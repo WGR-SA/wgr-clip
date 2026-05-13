@@ -11,15 +11,31 @@ const update = shallowRef<Update | null>(null)
 const installing = ref(false)
 const dismissed = ref(false)
 const error = ref<string | null>(null)
+const downloaded = ref(0)
+const total = ref(0)
+const phase = ref<'idle' | 'downloading' | 'installing'>('idle')
+
+const pct = computed(() =>
+  total.value > 0 ? Math.min(100, Math.round((downloaded.value / total.value) * 100)) : 0
+)
+const sizeLabel = computed(() => {
+  if (!total.value) return ''
+  const mb = (bytes: number) => (bytes / (1024 * 1024)).toFixed(1)
+  return `${mb(downloaded.value)} / ${mb(total.value)} Mo`
+})
+
+const btnLabel = computed(() => {
+  if (phase.value === 'downloading') return total.value ? `${pct.value} %` : 'Téléchargement…'
+  if (phase.value === 'installing') return 'Installation…'
+  return 'Installer et redémarrer'
+})
 
 onMounted(() => {
-  // Auto check 5s after boot to avoid blocking initial paint
   setTimeout(async () => {
     try {
       const u = await check()
       if (u) update.value = u
     } catch (e) {
-      // Network errors / unsigned dev builds — silent
       console.warn('updater check failed', e)
     }
   }, 5000)
@@ -29,12 +45,28 @@ async function install () {
   if (!update.value) return
   installing.value = true
   error.value = null
+  downloaded.value = 0
+  total.value = 0
+  phase.value = 'downloading'
   try {
-    await update.value.downloadAndInstall()
+    await update.value.downloadAndInstall((event) => {
+      switch (event.event) {
+        case 'Started':
+          total.value = event.data.contentLength ?? 0
+          break
+        case 'Progress':
+          downloaded.value += event.data.chunkLength
+          break
+        case 'Finished':
+          phase.value = 'installing'
+          break
+      }
+    })
     await relaunch()
   } catch (e) {
     error.value = String(e)
     installing.value = false
+    phase.value = 'idle'
   }
 }
 </script>
@@ -51,9 +83,22 @@ async function install () {
     <div class="updbanner__msg">
       Mise à jour disponible v<strong>{{ update.version }}</strong>
       <span
+        v-if="phase === 'downloading' && total"
+        class="updbanner__sub"
+      > · {{ sizeLabel }}</span>
+      <span
         v-if="error"
         class="updbanner__err"
       > · {{ error }}</span>
+      <div
+        v-if="phase === 'downloading' && total"
+        class="updbanner__bar"
+      >
+        <div
+          class="updbanner__bar-fill"
+          :style="{ width: pct + '%' }"
+        />
+      </div>
     </div>
     <UButton
       size="xs"
@@ -62,7 +107,7 @@ async function install () {
       :loading="installing"
       @click="install"
     >
-      {{ installing ? 'Installation…' : 'Installer et redémarrer' }}
+      {{ btnLabel }}
     </UButton>
     <UButton
       size="xs"
@@ -99,5 +144,23 @@ async function install () {
 
 .updbanner__err {
   color: #fca5a5;
+}
+
+.updbanner__sub {
+  opacity: 0.7;
+}
+
+.updbanner__bar {
+  height: 3px;
+  margin-top: 0.35rem;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.updbanner__bar-fill {
+  height: 100%;
+  background: var(--color-icterine-400);
+  transition: width 120ms ease;
 }
 </style>
