@@ -11,7 +11,7 @@ Drop any media → wgr-clip auto-detects the kind and produces a web-friendly fi
 - **Image** → `.jpg` (resized to a safe max dim, JPEG quality preset)
 - **Audio** → `.mp3` (LAME, universal compat)
 
-3 presets per kind (Original / Web / High Quality) plus a **Personnalisé** mode for custom dimensions, CRF and bitrates. Multi-file batch with real-time progress, cancellable, error details with copy-diagnostics. Click the dropzone or drop folders — both work.
+3 presets per kind (Original / Web / High Quality) plus a **Personnalisé** mode for custom dimensions, CRF and bitrates. Named presets can also be **imported from JSON files** and stay available across launches (see [Imported presets](#imported-presets)). Multi-file batch with real-time progress, cancellable, error details with copy-diagnostics. Click the dropzone or drop folders — both work.
 
 ## Stack
 - **Tauri 2** + Rust transcode engine
@@ -32,6 +32,35 @@ npm run tauri:dev
 
 App opens at `http://localhost:1420` (port chosen to avoid collision with other Nuxt dev servers).
 
+Tests: `npm test` (vitest, pure TS helpers in `tests/`) and `cd src-tauri && cargo test` (ffmpeg argv + output naming).
+
+## Imported presets
+
+Any preset menu ends with **Gérer les presets…**, which opens a manager to import a JSON file or delete imported presets. Imported presets are listed in the menu of their kind, persisted in the settings store, and their `id` becomes the output filename suffix (`photo_shop-800.jpg`). Re-importing a file with the same ids replaces those presets.
+
+```json
+{
+  "presets": [
+    { "id": "shop-800",  "kind": "image", "name": "Shop 800px",  "max_width": 800,  "max_height": 800, "quality": 82 },
+    { "id": "hero-1080", "kind": "video", "name": "Hero 1920×1080", "max_width": 1920, "max_height": 1080, "crf": 24, "audio_kbps": 128 },
+    { "id": "podcast-96", "kind": "audio", "name": "Podcast 96k", "kbps": 96 }
+  ]
+}
+```
+
+| Field | Kinds | Notes |
+|---|---|---|
+| `kind` | all | `video`, `image` or `audio` (required) |
+| `name` | all | Menu label, 1–60 chars (required) |
+| `id` | all | `[a-z0-9][a-z0-9_-]*`, max 40. Derived from `name` when absent (`Bannière 1920` → `banniere-1920`) |
+| `max_width`, `max_height` | video, image | Fit inside the box, aspect preserved, never upscaled. `0` or absent = free |
+| `crf` | video | 15–32, default 22 (mapped to a bitrate on hardware encoders) |
+| `audio_kbps` | video | AAC track, 32–320, default 128 |
+| `quality` | image | JPEG 1–100, default 85 |
+| `kbps` | audio | MP3, 32–320, default 128 |
+
+`presets/example.json` is a ready-to-import reference. Validation errors are shown as a toast with the offending path (`presets[0].kind : …`).
+
 ## Project layout
 
 ```
@@ -43,12 +72,17 @@ app/                       Nuxt 4 source (UI)
     JobList / JobRow      live progress + actions
     JobErrorPanel         expandable stderr + copy diagnostics
     CustomParamsPanel     advanced inputs when "Personnalisé" is selected
+    PresetManagerModal    list / delete / import user presets (JSON)
   composables/
     useTranscodeQueue.ts   reactive Map of jobs + Tauri event listeners
+    useUserPresets.ts      imported presets (store key `userPresets`) + manager state
     useAutoFit.ts          auto-resize Tauri window to content
     useBatchNotification   fires native notif on batch completion
     useSettingsStore       persists preferences via tauri-plugin-store
-  types/job.ts             Preset, MediaKind, Job, CustomParams TS types
+  utils/userPresets.ts     zod schema for preset files, CustomParams conversion
+  types/job.ts             Preset, PresetSelection, MediaKind, Job, CustomParams TS types
+presets/example.json       reference preset file to import
+tests/                     vitest unit tests (`npm test`)
 src-tauri/                 Rust + Tauri config
   src/
     main.rs · lib.rs       entry, plugin registration, AppState
