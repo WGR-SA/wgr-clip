@@ -1,14 +1,19 @@
 export type Preset = 'web1080p' | '4k' | 'source' | 'custom'
 
+/** What the per-kind dropdown holds: a built-in preset or an imported one. */
+export type PresetSelection = Preset | `user:${string}`
+
 export type MediaKind = 'video' | 'image' | 'audio'
 
 export interface CustomParams {
   // Video
+  video_max_width: number    // 0 = no clamp
   video_max_height: number   // 0 = no clamp
   video_crf: number          // 15..32, lower = better
   video_audio_kbps: number   // AAC bitrate for video's audio track
   // Image
-  image_max_dim: number      // 0 = no resize
+  image_max_width: number    // 0 = no clamp
+  image_max_height: number   // 0 = no clamp
   image_quality: number      // 1..100, higher = better
   // Audio
   audio_kbps: number         // 32..320

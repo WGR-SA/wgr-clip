@@ -37,6 +37,7 @@ function onCropDrop(paths: string[]) {
     </section>
 
     <CustomParamsPanel />
+    <PresetManagerModal />
 
     <CropEditor v-if="crop.active.value" />
     <div
