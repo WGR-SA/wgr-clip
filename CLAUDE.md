@@ -23,12 +23,13 @@ Tauri 2 desktop app that auto-detects dropped media kind (video / image / audio)
 
 ## Where things live
 
-- **Frontend** → `app/`. Components in `app/components/`, composables in `app/composables/`, types in `app/types/`.
+- **Frontend** → `app/`. Components in `app/components/`, composables in `app/composables/`, types in `app/types/`, pure helpers in `app/utils/` (Nuxt auto-imports them; keep them free of Tauri/Nuxt imports so vitest can run them).
+- **User presets** → schema + conversion in `app/utils/userPresets.ts`, import/persistence in `app/composables/useUserPresets.ts`, reference file `presets/example.json`. They ride the `Preset::Custom` path: `toCustomParams()` fills a `CustomParams`, the preset `id` goes to `start_jobs` as `slug` for the output suffix.
 - **Backend** → `src-tauri/src/`. Modules: `transcode/{mod,probe,encoder,preset,queue}.rs`, `commands.rs`, `errors.rs`, `hw_accel.rs`, `lib.rs`.
 - **Sidecars** → `src-tauri/binaries/ffmpeg-<triple>` (gitignored). Fetched by `scripts/rename-sidecars.mjs` from evermeet.cx (mac) and BtbN (win).
 - **Capabilities** → `src-tauri/capabilities/default.json`. Adding a new Tauri plugin requires adding its `<plugin>:default` permission here AND registering it in `lib.rs`.
 - **Plan files** → user keeps implementation plans in `~/.claude/plans/`. The original plan is at `~/.claude/plans/ok-j-ai-besoin-pour-snug-torvalds.md`. Specs and plans for later features live in `docs/superpowers/{specs,plans}/`.
-- **Tests** → `npm test` (Vitest, `app/**/*.test.ts`, pure utils only) and `cargo test` in `src-tauri`.
+- **Tests** → `npm test` (Vitest, `app/**/*.test.ts`, pure utils only, including `app/utils/userPresets.test.ts`) and `#[cfg(test)]` modules in `preset.rs`, `mod.rs`, `encoder.rs` (`cd src-tauri && cargo test`).
 
 ## Brand assets
 
@@ -48,12 +49,15 @@ Tauri 2 desktop app that auto-detects dropped media kind (video / image / audio)
 - **Crop rects are fractions (0..1), never pixels.** Preview and encode share the same ffmpeg decoder (which autorotates), so the frame stays valid regardless of EXIF orientation or preview size. The filter is `crop=…` placed before `scale=` in `preset.rs::image_args`. **ffprobe does not autorotate**: its `width`/`height` are the stored ones, so `orientSourceSize()` swaps them to match the decoded preview before the px readout and ratio locks use them.
 - **Drag-drop hit-testing**: Tauri's `position` is in physical pixels; divide by `devicePixelRatio` before comparing with `getBoundingClientRect()` (`utils/dropHitTest.ts`). The single Tauri listener is guarded on its in-flight promise (`utils/dropDispatcher.ts`): two zones mount in the same tick, and a guard on the resolved value attaches twice and handles every drop twice.
 - **Composable logic lives in `app/utils/*` cores with injected deps** (`cropSession.ts`, `dropDispatcher.ts`) so Vitest covers it; the `use*` composables are thin Tauri/Nuxt wrappers.
+- **Files picked with the dialog plugin are auto-added to the fs scope** (`allow_file` in tauri-plugin-dialog). That is why `readTextFile` on an imported preset file works with only `fs:allow-read-text-file` and no scope entry.
+- **A longest-side cap D is the same as fitting in a D×D box.** `fit_filter()` in `preset.rs` covers both video and image scaling; the legacy `image_max_dim` setting is migrated to `image_max_width/height` in `useSettingsStore`.
 
 ## Common tasks
 
 - **Add a Tauri plugin**: add to `Cargo.toml` deps, register in `lib.rs` builder, add `<plugin>:default` to `capabilities/default.json`, add the JS package to `package.json` if needed.
-- **Change preset behavior**: edit `src-tauri/src/transcode/preset.rs::build_args`. Frontend label changes go in `app/components/PresetSelector.vue::itemsByKind`.
+- **Change preset behavior**: edit `src-tauri/src/transcode/preset.rs::build_args` and update its tests. Frontend label changes go in `app/components/PresetSelector.vue::itemsByKind`.
 - **Change the crop editor's ratio presets**: `RATIO_PRESETS` in `app/utils/cropGeometry.ts`.
+- **Change the preset file format**: edit the zod schema in `app/utils/userPresets.ts`, add a case to `app/utils/userPresets.test.ts`, refresh `presets/example.json` and the README table.
 - **Regenerate icons**: `node scripts/generate-icon.mjs && npx tauri icon src-tauri/icons/icon-1024.png`. Use `--label X` for sibling apps.
 - **Test the full pipeline locally**: `npm run tauri:dev`, drop a `.mov`, verify hw_accel detected in dev log, watch progress events fire at ~4 Hz.
 

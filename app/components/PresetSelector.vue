@@ -188,5 +188,7 @@ const meta = computed(() => kindMeta[props.kind])
    for our compact pill triggers. Force a sensible reading width. */
 :global(.preset__popover) {
   min-width: 280px !important;
+  /* Default max-h-60 hides the 5th entry (Gérer les presets…) behind a scroll. */
+  max-height: min(70vh, 34rem) !important;
 }
 </style>
