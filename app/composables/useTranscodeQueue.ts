@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { loadSettings, saveSettings } from '~/composables/useSettingsStore'
+import { useUserPresets } from '~/composables/useUserPresets'
 import type {
   AppInfo,
   CustomParams,
@@ -12,14 +13,18 @@ import type {
   JobErrorEvent,
   MediaKind,
   Preset,
+  PresetSelection,
   ProgressTick
 } from '~/types/job'
+import { isBuiltinPreset, toCustomParams, userIdFromSelection } from '~/utils/userPresets'
 
 export const DEFAULT_CUSTOM: CustomParams = {
+  video_max_width: 0,
   video_max_height: 1080,
   video_crf: 22,
   video_audio_kbps: 128,
-  image_max_dim: 2000,
+  image_max_width: 2000,
+  image_max_height: 2000,
   image_quality: 85,
   audio_kbps: 192
 }
@@ -39,9 +44,9 @@ function detectKind (path: string): MediaKind {
 
 interface QueueState {
   jobs: Map<string, Job>
-  videoPreset: Preset
-  imagePreset: Preset
-  audioPreset: Preset
+  videoPreset: PresetSelection
+  imagePreset: PresetSelection
+  audioPreset: PresetSelection
   custom: CustomParams
   outputDir: string | null
   appInfo: AppInfo | null
@@ -81,13 +86,47 @@ export function useTranscodeQueue () {
     unlisteners: []
   }))
 
-  function presetForKind (kind: MediaKind): Preset {
+  const userPresets = useUserPresets()
+
+  function presetForKind (kind: MediaKind): PresetSelection {
     switch (kind) {
       case 'image': return state.value.imagePreset
       case 'audio': return state.value.audioPreset
       case 'video':
       default: return state.value.videoPreset
     }
+  }
+
+  interface ResolvedPreset {
+    preset: Preset
+    custom: CustomParams | null
+    slug: string | null
+  }
+
+  // An imported preset rides on the built-in `custom` path with its own
+  // params and output suffix. A selection pointing at a preset that was
+  // deleted since falls back to Original and heals the persisted choice.
+  function resolveSelection (kind: MediaKind): ResolvedPreset {
+    const selection = presetForKind(kind)
+    if (isBuiltinPreset(selection)) {
+      return {
+        preset: selection,
+        custom: selection === 'custom' ? { ...state.value.custom } : null,
+        slug: null
+      }
+    }
+    const id = userIdFromSelection(selection)
+    const user = id === null ? undefined : userPresets.byId(id)
+    if (!user) {
+      setPreset(kind, 'source')
+      return { preset: 'source', custom: null, slug: null }
+    }
+    return { preset: 'custom', custom: toCustomParams(user, state.value.custom), slug: user.id }
+  }
+
+  function isAvailable (selection: PresetSelection): boolean {
+    const id = userIdFromSelection(selection)
+    return id === null || userPresets.byId(id) !== undefined
   }
 
   // Reactive map exposed as a sorted array for templates
@@ -139,11 +178,12 @@ export function useTranscodeQueue () {
     if (state.value.listenersBound) return
     state.value.listenersBound = true
 
-    // Restore persisted settings (preset + outputDir + custom params).
+    // Restore persisted settings (presets + outputDir + custom params).
     const persisted = await loadSettings()
-    if (persisted.videoPreset) state.value.videoPreset = persisted.videoPreset
-    if (persisted.imagePreset) state.value.imagePreset = persisted.imagePreset
-    if (persisted.audioPreset) state.value.audioPreset = persisted.audioPreset
+    if (persisted.userPresets) userPresets.hydrate(persisted.userPresets)
+    if (persisted.videoPreset && isAvailable(persisted.videoPreset)) state.value.videoPreset = persisted.videoPreset
+    if (persisted.imagePreset && isAvailable(persisted.imagePreset)) state.value.imagePreset = persisted.imagePreset
+    if (persisted.audioPreset && isAvailable(persisted.audioPreset)) state.value.audioPreset = persisted.audioPreset
     if (persisted.outputDir !== undefined) state.value.outputDir = persisted.outputDir
     if (persisted.custom) state.value.custom = { ...DEFAULT_CUSTOM, ...persisted.custom }
 
@@ -250,8 +290,7 @@ export function useTranscodeQueue () {
 
     const m = new Map(state.value.jobs)
     for (const [kind, inputs] of groups) {
-      const preset = presetForKind(kind)
-      const customForJob = preset === 'custom' ? { ...state.value.custom } : null
+      const { preset, custom: customForJob, slug } = resolveSelection(kind)
       let ids: string[]
       try {
         ids = await invoke<string[]>('start_jobs', {
@@ -259,6 +298,7 @@ export function useTranscodeQueue () {
             inputs,
             preset,
             custom: customForJob,
+            slug,
             output_dir: state.value.outputDir
           }
         })
@@ -319,7 +359,7 @@ export function useTranscodeQueue () {
     }
   }
 
-  function setPreset (kind: MediaKind, p: Preset) {
+  function setPreset (kind: MediaKind, p: PresetSelection) {
     if (kind === 'video') state.value.videoPreset = p
     else if (kind === 'image') state.value.imagePreset = p
     else if (kind === 'audio') state.value.audioPreset = p
