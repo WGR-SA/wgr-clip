@@ -6,17 +6,17 @@ export type PresetSelection = Preset | `user:${string}`
 export type MediaKind = 'video' | 'image' | 'audio'
 
 export interface CustomParams {
-  // Video
-  video_max_width: number    // 0 = no clamp
-  video_max_height: number   // 0 = no clamp
-  video_crf: number          // 15..32, lower = better
-  video_audio_kbps: number   // AAC bitrate for video's audio track
-  // Image
-  image_max_width: number    // 0 = no clamp
-  image_max_height: number   // 0 = no clamp
-  image_quality: number      // 1..100, higher = better
+  // Video. Dimensions are a fit-inside box, 0 = no clamp on that axis.
+  video_max_width: number
+  video_max_height: number
+  video_crf: number // 15..32, lower = better
+  video_audio_kbps: number // AAC bitrate for video's audio track
+  // Image. Same box semantics as video.
+  image_max_width: number
+  image_max_height: number
+  image_quality: number // 1..100, higher = better
   // Audio
-  audio_kbps: number         // 32..320
+  audio_kbps: number // 32..320
 }
 
 export type JobStatusState =
