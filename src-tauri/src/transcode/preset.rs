@@ -22,6 +22,24 @@ pub fn build_args(
     }
 }
 
+// --- Scaling --------------------------------------------------------------
+
+/// yuv420p needs even dimensions; applied when no size limit is requested.
+const EVEN_DIMS_FILTER: &str = "scale=trunc(iw/2)*2:trunc(ih/2)*2";
+
+/// Downscale-only fit inside a `max_w × max_h` box, aspect preserved. A zero
+/// limit leaves that axis free; both zero means no scaling at all.
+fn fit_filter(max_w: u32, max_h: u32) -> Option<String> {
+    match (max_w, max_h) {
+        (0, 0) => None,
+        (w, 0) => Some(format!("scale='min(iw,{w})':-2")),
+        (0, h) => Some(format!("scale=-2:'min(ih,{h})'")),
+        (w, h) => Some(format!(
+            "scale='min(iw,{w})':'min(ih,{h})':force_original_aspect_ratio=decrease:force_divisible_by=2"
+        )),
+    }
+}
+
 // --- Video ----------------------------------------------------------------
 
 fn video_args(
@@ -40,20 +58,14 @@ fn video_args(
     a.push("-i".into());
     a.push(input.display().to_string());
 
-    let video_max_h: u32 = match preset {
-        Preset::Web1080p => 1080,
-        Preset::FourK => 2160,
-        Preset::Source => 0,
-        Preset::Custom => custom.map(|c| c.video_max_height).unwrap_or(0),
+    let (video_max_w, video_max_h): (u32, u32) = match preset {
+        Preset::Web1080p => (0, 1080),
+        Preset::FourK => (0, 2160),
+        Preset::Source => (0, 0),
+        Preset::Custom => custom.map(|c| (c.video_max_width, c.video_max_height)).unwrap_or((0, 0)),
     };
-    if video_max_h > 0 {
-        a.push("-vf".into());
-        // Scale to fit max_h while keeping aspect, only downscale.
-        a.push(format!("scale=-2:'min({},ih)'", video_max_h));
-    } else {
-        a.push("-vf".into());
-        a.push("scale=trunc(iw/2)*2:trunc(ih/2)*2".into());
-    }
+    a.push("-vf".into());
+    a.push(fit_filter(video_max_w, video_max_h).unwrap_or_else(|| EVEN_DIMS_FILTER.into()));
 
     a.push("-c:v".into());
     a.push(codec.to_string());
@@ -247,9 +259,9 @@ pub fn crop_filter(rect: CropRect) -> String {
     )
 }
 
-/// Image args: optional crop, then scale-down with aspect ratio preserved,
-/// JPEG output via mjpeg encoder with quality controlled by `-q:v` (1-31,
-/// lower = better).
+/// Image args: optional crop, then fit-in-box scaling with aspect ratio
+/// preserved, JPEG output via mjpeg encoder with quality controlled by
+/// `-q:v` (1-31, lower = better).
 fn image_args(
     preset: Preset,
     input: &Path,
@@ -257,11 +269,11 @@ fn image_args(
     custom: Option<CustomParams>,
     crop: Option<CropRect>,
 ) -> Vec<String> {
-    let max_dim: u32 = match preset {
-        Preset::Web1080p => 2000,
-        Preset::FourK => 4000,
-        Preset::Source => 0,
-        Preset::Custom => custom.map(|c| c.image_max_dim).unwrap_or(0),
+    let (max_w, max_h): (u32, u32) = match preset {
+        Preset::Web1080p => (2000, 2000),
+        Preset::FourK => (4000, 4000),
+        Preset::Source => (0, 0),
+        Preset::Custom => custom.map(|c| (c.image_max_width, c.image_max_height)).unwrap_or((0, 0)),
     };
     // mjpeg q:v scale (lower = better, 1..31):
     //   2 ≈ JPEG q95 (visually lossless, often BIGGER than a source q80 photo)
@@ -292,12 +304,8 @@ fn image_args(
     if let Some(rect) = crop {
         filters.push(crop_filter(rect));
     }
-    if max_dim > 0 {
-        // Fit within a max_dim square preserving aspect; only downscale (no upscale).
-        filters.push(format!(
-            "scale='if(gte(iw,ih),min({m},iw),-2)':'if(gte(iw,ih),-2,min({m},ih))'",
-            m = max_dim
-        ));
+    if let Some(filter) = fit_filter(max_w, max_h) {
+        filters.push(filter);
     }
     if !filters.is_empty() {
         a.push("-vf".into());
@@ -362,13 +370,31 @@ fn audio_args(preset: Preset, input: &Path, output: &Path, custom: Option<Custom
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hw_accel::HwAccel;
+
+    const BOX_2000: &str =
+        "scale='min(iw,2000)':'min(ih,2000)':force_original_aspect_ratio=decrease:force_divisible_by=2";
 
     fn rect() -> CropRect {
         CropRect { x: 0.25, y: 0.1, w: 0.5, h: 0.8 }
     }
 
-    fn vf(args: &[String]) -> Option<String> {
-        args.iter().position(|a| a == "-vf").map(|i| args[i + 1].clone())
+    fn vf(args: &[String]) -> Option<&str> {
+        let i = args.iter().position(|a| a == "-vf")?;
+        args.get(i + 1).map(String::as_str)
+    }
+
+    fn args_for(kind: MediaKind, preset: Preset, custom: Option<CustomParams>) -> Vec<String> {
+        build_args(
+            kind,
+            preset,
+            HwAccel::Software,
+            Path::new("/in/src.bin"),
+            Path::new("/out/dst.bin"),
+            1080,
+            custom,
+            None,
+        )
     }
 
     #[test]
@@ -376,6 +402,29 @@ mod tests {
         assert_eq!(
             crop_filter(rect()),
             "crop=trunc(iw*0.500000/2)*2:trunc(ih*0.800000/2)*2:trunc(iw*0.250000):trunc(ih*0.100000)"
+        );
+    }
+
+    #[test]
+    fn fit_filter_without_limits_is_none() {
+        assert_eq!(fit_filter(0, 0), None);
+    }
+
+    #[test]
+    fn fit_filter_with_height_only_downscales_by_height() {
+        assert_eq!(fit_filter(0, 1080).as_deref(), Some("scale=-2:'min(ih,1080)'"));
+    }
+
+    #[test]
+    fn fit_filter_with_width_only_downscales_by_width() {
+        assert_eq!(fit_filter(1920, 0).as_deref(), Some("scale='min(iw,1920)':-2"));
+    }
+
+    #[test]
+    fn fit_filter_with_box_fits_inside_without_upscale() {
+        assert_eq!(
+            fit_filter(800, 600).as_deref(),
+            Some("scale='min(iw,800)':'min(ih,600)':force_original_aspect_ratio=decrease:force_divisible_by=2")
         );
     }
 
@@ -401,5 +450,52 @@ mod tests {
         assert!(vf(&source).is_none());
         let web = image_args(Preset::Web1080p, Path::new("in.jpg"), Path::new("out.jpg"), None, None);
         assert!(vf(&web).unwrap().starts_with("scale="));
+    }
+
+    #[test]
+    fn custom_image_box_uses_both_limits() {
+        let custom = CustomParams {
+            image_max_width: 800,
+            image_max_height: 600,
+            image_quality: 82,
+            ..CustomParams::default()
+        };
+        let args = args_for(MediaKind::Image, Preset::Custom, Some(custom));
+        assert_eq!(
+            vf(&args),
+            Some("scale='min(iw,800)':'min(ih,600)':force_original_aspect_ratio=decrease:force_divisible_by=2")
+        );
+    }
+
+    #[test]
+    fn custom_video_width_only_leaves_height_free() {
+        let custom = CustomParams { video_max_width: 1280, video_crf: 24, ..CustomParams::default() };
+        let args = args_for(MediaKind::Video, Preset::Custom, Some(custom));
+        assert_eq!(vf(&args), Some("scale='min(iw,1280)':-2"));
+    }
+
+    #[test]
+    fn custom_video_without_limits_only_forces_even_dimensions() {
+        let custom = CustomParams { video_crf: 24, ..CustomParams::default() };
+        let args = args_for(MediaKind::Video, Preset::Custom, Some(custom));
+        assert_eq!(vf(&args), Some("scale=trunc(iw/2)*2:trunc(ih/2)*2"));
+    }
+
+    #[test]
+    fn builtin_image_web_preset_fits_in_2000_box() {
+        let args = args_for(MediaKind::Image, Preset::Web1080p, None);
+        assert_eq!(vf(&args), Some(BOX_2000));
+    }
+
+    #[test]
+    fn builtin_image_source_preset_has_no_scale_filter() {
+        let args = args_for(MediaKind::Image, Preset::Source, None);
+        assert_eq!(vf(&args), None);
+    }
+
+    #[test]
+    fn builtin_video_1080p_preset_caps_height_only() {
+        let args = args_for(MediaKind::Video, Preset::Web1080p, None);
+        assert_eq!(vf(&args), Some("scale=-2:'min(ih,1080)'"));
     }
 }

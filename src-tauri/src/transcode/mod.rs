@@ -31,7 +31,10 @@ impl Preset {
 /// User-defined parameters used when `Preset::Custom` is selected. Only the
 /// fields relevant to the job's `MediaKind` are read.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct CustomParams {
+    /// Video: max output width in pixels. 0 = no clamp.
+    pub video_max_width: u32,
     /// Video: max output height in pixels. 0 = no clamp.
     pub video_max_height: u32,
     /// Video: x264 CRF 15..32 (lower = better). Mapped to equivalent
@@ -39,8 +42,10 @@ pub struct CustomParams {
     pub video_crf: u32,
     /// Video: AAC audio bitrate in kbps (e.g. 128, 192, 256).
     pub video_audio_kbps: u32,
-    /// Image: longest side max in pixels. 0 = no clamp.
-    pub image_max_dim: u32,
+    /// Image: max output width in pixels. 0 = no clamp.
+    pub image_max_width: u32,
+    /// Image: max output height in pixels. 0 = no clamp.
+    pub image_max_height: u32,
     /// Image: JPEG quality 1..100 (higher = better).
     pub image_quality: u32,
     /// Audio: AAC bitrate in kbps.
@@ -196,4 +201,27 @@ pub struct JobDiagnostics {
     pub error_kind: String,
     pub stderr_tail: Vec<String>,
     pub timestamp: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CustomParams;
+
+    #[test]
+    fn custom_params_missing_box_fields_default_to_zero() {
+        let json = r#"{"video_max_height":720,"video_crf":22,"video_audio_kbps":128,"image_quality":85,"audio_kbps":128}"#;
+        let c: CustomParams = serde_json::from_str(json).unwrap();
+        assert_eq!(c.video_max_height, 720);
+        assert_eq!(c.video_max_width, 0);
+        assert_eq!(c.image_max_width, 0);
+        assert_eq!(c.image_max_height, 0);
+    }
+
+    #[test]
+    fn custom_params_ignore_legacy_image_max_dim() {
+        let json = r#"{"image_max_dim":2000,"image_quality":85}"#;
+        let c: CustomParams = serde_json::from_str(json).unwrap();
+        assert_eq!(c.image_max_width, 0);
+        assert_eq!(c.image_quality, 85);
+    }
 }
