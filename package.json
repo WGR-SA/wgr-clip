@@ -11,6 +11,7 @@
     "preview": "nuxt preview",
     "prepare": "nuxt prepare",
     "lint": "eslint .",
+    "test": "vitest run",
     "typecheck": "nuxt typecheck",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
@@ -40,6 +41,7 @@
     "@tauri-apps/cli": "^2.0.0",
     "eslint": "^10.2.1",
     "typescript": "^6.0.3",
+    "vitest": "^5.0.2",
     "vue-tsc": "^3.2.7",
     "wawoff2": "^2.0.1"
   }

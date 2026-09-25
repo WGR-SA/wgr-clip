@@ -57,6 +57,7 @@ function makeJob (id: string, input: string, output: string, preset: Preset, kin
     preset,
     kind: kind ?? detectKind(input),
     custom: custom ?? null,
+    crop: null,
     status: { state: 'pending' },
     progress: 0,
     speed_x: 0,
