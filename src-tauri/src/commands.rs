@@ -1,7 +1,8 @@
 use crate::errors::AppError;
-use crate::transcode::{encoder, CropRect, CustomParams, Job, JobDiagnostics, MediaKind, Preset};
+use crate::transcode::{encoder, CropRect, CustomParams, Job, JobDiagnostics, JobStatus, MediaKind, Preset};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
@@ -139,6 +140,15 @@ pub struct StartJobsArgs {
 #[tauri::command]
 pub fn start_jobs(state: State<'_, AppState>, args: StartJobsArgs) -> Result<Vec<Uuid>, AppError> {
     let mut ids = Vec::with_capacity(args.inputs.len());
+    // Outputs of jobs still in flight don't exist on disk yet but are taken:
+    // a second crop of the same source must not overwrite the first.
+    let mut claimed: HashSet<PathBuf> = state
+        .queue
+        .jobs
+        .iter()
+        .filter(|j| matches!(j.status, JobStatus::Pending | JobStatus::Probing | JobStatus::Encoding))
+        .map(|j| j.output.clone())
+        .collect();
     for input in args.inputs {
         let kind = MediaKind::from_path(&input).unwrap_or(MediaKind::Video);
         let dir = match &args.output_dir {
@@ -146,7 +156,8 @@ pub fn start_jobs(state: State<'_, AppState>, args: StartJobsArgs) -> Result<Vec
             None => default_output_dir(&input),
         };
         std::fs::create_dir_all(&dir).map_err(|e| AppError::Other(e.to_string()))?;
-        let output = encoder::resolve_output_path(&input, &dir, args.preset, kind, args.crop.is_some());
+        let output = encoder::resolve_output_path(&input, &dir, args.preset, kind, args.crop.is_some(), &claimed);
+        claimed.insert(output.clone());
         let id = state
             .queue
             .enqueue(input, output, args.preset, kind, args.custom, args.crop);

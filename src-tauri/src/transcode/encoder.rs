@@ -4,7 +4,7 @@ use super::{
 };
 use crate::errors::JobError;
 use crate::hw_accel::HwAccel;
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
@@ -401,6 +401,7 @@ pub fn resolve_output_path(
     preset: Preset,
     kind: MediaKind,
     cropped: bool,
+    claimed: &HashSet<PathBuf>,
 ) -> PathBuf {
     let stem = input
         .file_stem()
@@ -414,7 +415,7 @@ pub fn resolve_output_path(
     };
     let mut candidate = output_dir.join(format!("{base}.{ext}"));
     let mut n = 2;
-    while candidate.exists() {
+    while candidate.exists() || claimed.contains(&candidate) {
         candidate = output_dir.join(format!("{base}_{n}.{ext}"));
         n += 1;
     }
@@ -424,6 +425,7 @@ pub fn resolve_output_path(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
 
     fn temp_dir() -> PathBuf {
         let dir = std::env::temp_dir().join(format!("wgr-clip-test-{}", Uuid::new_v4()));
@@ -434,9 +436,9 @@ mod tests {
     #[test]
     fn cropped_output_gets_crop_infix() {
         let dir = temp_dir();
-        let cropped = resolve_output_path(Path::new("/pics/photo.HEIC"), &dir, Preset::Web1080p, MediaKind::Image, true);
+        let cropped = resolve_output_path(Path::new("/pics/photo.HEIC"), &dir, Preset::Web1080p, MediaKind::Image, true, &HashSet::new());
         assert_eq!(cropped.file_name().unwrap().to_str().unwrap(), "photo_crop_web.jpg");
-        let plain = resolve_output_path(Path::new("/pics/photo.HEIC"), &dir, Preset::Web1080p, MediaKind::Image, false);
+        let plain = resolve_output_path(Path::new("/pics/photo.HEIC"), &dir, Preset::Web1080p, MediaKind::Image, false, &HashSet::new());
         assert_eq!(plain.file_name().unwrap().to_str().unwrap(), "photo_web.jpg");
         std::fs::remove_dir_all(&dir).unwrap();
     }
@@ -445,8 +447,19 @@ mod tests {
     fn cropped_output_never_overwrites_an_existing_file() {
         let dir = temp_dir();
         std::fs::write(dir.join("photo_crop_web.jpg"), b"x").unwrap();
-        let second = resolve_output_path(Path::new("/pics/photo.jpg"), &dir, Preset::Web1080p, MediaKind::Image, true);
+        let second = resolve_output_path(Path::new("/pics/photo.jpg"), &dir, Preset::Web1080p, MediaKind::Image, true, &HashSet::new());
         assert_eq!(second.file_name().unwrap().to_str().unwrap(), "photo_crop_web_2.jpg");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn output_path_skips_paths_claimed_by_queued_jobs() {
+        let dir = temp_dir();
+        let mut claimed = HashSet::new();
+        claimed.insert(dir.join("photo_crop_web.jpg"));
+        claimed.insert(dir.join("photo_crop_web_2.jpg"));
+        let third = resolve_output_path(Path::new("/pics/photo.jpg"), &dir, Preset::Web1080p, MediaKind::Image, true, &claimed);
+        assert_eq!(third.file_name().unwrap().to_str().unwrap(), "photo_crop_web_3.jpg");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

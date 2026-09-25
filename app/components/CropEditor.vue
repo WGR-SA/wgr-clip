@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { CROP_ZONE_ID } from '~/composables/useDropTargets'
 import { RATIO_PRESETS, moveRect, resizeRect, type Handle } from '~/utils/cropGeometry'
+import { editorKeyAction } from '~/utils/editorKeys'
 import { basename } from '~/utils/format'
 
 const crop = useCropSession()
@@ -62,13 +63,11 @@ function onPointerUp() {
 }
 
 function onKey(e: KeyboardEvent) {
-  if (e.key === 'Enter') {
-    e.preventDefault()
-    void crop.confirm()
-  } else if (e.key === 'Escape') {
-    e.preventDefault()
-    crop.close()
-  }
+  const action = editorKeyAction({ key: e.key, repeat: e.repeat, target: e.target instanceof HTMLElement ? e.target : null })
+  if (!action) return
+  e.preventDefault()
+  if (action === 'confirm') void crop.confirm()
+  else crop.close()
 }
 
 let unregister: (() => void) | null = null

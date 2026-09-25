@@ -1,4 +1,4 @@
-import type { CropRect } from '~/types/job'
+import type { CropRect, MediaSize } from '~/types/job'
 
 export type Handle = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw'
 
@@ -128,4 +128,12 @@ function fitRatio(e: Edges, handle: Handle, ratio: number, imageAspect: number):
     else nb = nt + h
   }
   return clampRect({ x: nl, y: nt, w: nr - nl, h: nb - nt })
+}
+
+// ffprobe reports stored (unrotated) dimensions while ffmpeg autorotates the
+// preview and the encode; the preview's orientation says which way round.
+export function orientSourceSize(probed: MediaSize, preview: MediaSize): MediaSize {
+  const long = Math.max(probed.width, probed.height)
+  const short = Math.min(probed.width, probed.height)
+  return preview.width >= preview.height ? { width: long, height: short } : { width: short, height: long }
 }

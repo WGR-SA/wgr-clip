@@ -3,7 +3,7 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { loadSettings, saveSettings } from '~/composables/useSettingsStore'
-import { icloudDisplayName, splitIcloudStubs } from '~/utils/icloud'
+import { icloudToast, splitIcloudStubs } from '~/utils/icloud'
 import type {
   AppInfo,
   CropRect,
@@ -40,12 +40,7 @@ export function detectKind(path: string): MediaKind {
 }
 
 export function toastIcloudStubs(stubs: string[]) {
-  useToast().add({
-    title: 'Fichier iCloud non téléchargé',
-    description: `${stubs.map(icloudDisplayName).join(', ')} : ouvrez-le dans Finder (clic droit → Télécharger maintenant) puis réessayez.`,
-    color: 'warning',
-    duration: 7000
-  })
+  useToast().add(icloudToast(stubs))
 }
 
 interface QueueState {

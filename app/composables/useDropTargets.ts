@@ -1,6 +1,5 @@
 import { getCurrentWebview } from '@tauri-apps/api/webview'
-import type { UnlistenFn } from '@tauri-apps/api/event'
-import { pickDropTarget, type DropZoneBounds } from '~/utils/dropHitTest'
+import { createDropDispatcher, type DispatcherHandler } from '~/utils/dropDispatcher'
 
 export const CONVERT_ZONE_ID = 'convert'
 export const CROP_ZONE_ID = 'crop'
@@ -11,74 +10,55 @@ export interface DropTarget {
   onDrop: (paths: string[]) => void
 }
 
-// One webview-wide Tauri listener shared by every zone; module scope so
-// registering a second zone never attaches a second listener.
-const targets = new Map<string, DropTarget>()
-let unlisten: UnlistenFn | null = null
+// One dispatcher per webview: zones come and go, the Tauri listener is
+// attached once and detached when the last zone leaves.
+let dispatcher: ReturnType<typeof createDropDispatcher> | null = null
+
+function attach(handler: DispatcherHandler) {
+  return getCurrentWebview().onDragDropEvent((event) => {
+    const p = event.payload
+    if (p.type === 'enter' || p.type === 'over') handler({ type: p.type, position: p.position })
+    else if (p.type === 'leave') handler({ type: 'leave' })
+    else handler({ type: 'drop', position: p.position, paths: p.paths })
+  })
+}
 
 export function useDropTargets() {
   const hoveredId = useState<string | null>('wgr-clip-drop-hover', () => null)
+  const toast = useToast()
 
-  function bounds(): DropZoneBounds[] {
-    const out: DropZoneBounds[] = []
-    for (const t of targets.values()) {
-      const r = t.el.value?.getBoundingClientRect()
-      if (r) out.push({ id: t.id, rect: { left: r.left, top: r.top, right: r.right, bottom: r.bottom } })
-    }
-    return out
-  }
-
-  function hitTest(position: { x: number, y: number }): string | null {
-    return pickDropTarget(position, window.devicePixelRatio, bounds())
-  }
-
-  function fallbackId(): string | null {
-    return targets.has(CONVERT_ZONE_ID) ? CONVERT_ZONE_ID : null
-  }
-
-  async function ensureListening() {
-    if (unlisten) return
-    try {
-      unlisten = await getCurrentWebview().onDragDropEvent((event) => {
-        const p = event.payload
-        if (p.type === 'enter' || p.type === 'over') {
-          hoveredId.value = hitTest(p.position) ?? fallbackId()
-        } else if (p.type === 'leave') {
-          hoveredId.value = null
-        } else if (p.type === 'drop') {
-          const id = hitTest(p.position) ?? fallbackId()
-          hoveredId.value = null
-          if (p.paths.length === 0) {
-            useToast().add({
-              title: 'Drop vide',
-              description: 'Aucun chemin de fichier reçu. Essayez un autre dossier.',
-              color: 'warning'
-            })
-            return
-          }
-          if (id) targets.get(id)?.onDrop(p.paths)
-        }
-      })
-    } catch (e) {
+  dispatcher ??= createDropDispatcher({
+    attach,
+    dpr: () => window.devicePixelRatio,
+    fallbackOrder: [CONVERT_ZONE_ID, CROP_ZONE_ID],
+    setHovered: (id) => {
+      hoveredId.value = id
+    },
+    onEmptyDrop: () => toast.add({
+      title: 'Drop vide',
+      description: 'Aucun chemin de fichier reçu. Essayez un autre dossier.',
+      color: 'warning'
+    }),
+    onAttachError: (e) => {
       console.error('[drop] failed to attach listener', e)
-      useToast().add({
+      toast.add({
         title: 'Drag-drop indisponible',
         description: 'Le listener Tauri n\'a pas pu être attaché. Essayez de relancer l\'app.',
         color: 'error'
       })
     }
-  }
+  })
+  const d = dispatcher
 
   function register(target: DropTarget): () => void {
-    targets.set(target.id, target)
-    void ensureListening()
-    return () => {
-      targets.delete(target.id)
-      if (targets.size === 0 && unlisten) {
-        unlisten()
-        unlisten = null
+    return d.register({
+      id: target.id,
+      onDrop: target.onDrop,
+      bounds: () => {
+        const r = target.el.value?.getBoundingClientRect()
+        return r ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom } : null
       }
-    }
+    })
   }
 
   return { hoveredId, register }

@@ -10,3 +10,12 @@ export function icloudDisplayName(path: string): string {
   const base = path.split(/[/\\]/).pop() ?? path
   return base.replace(/^\./, '').replace(/\.icloud$/i, '')
 }
+
+export function icloudToast(stubs: string[]) {
+  return {
+    title: 'Fichier iCloud non téléchargé',
+    description: `${stubs.map(icloudDisplayName).join(', ')} : ouvrez-le dans Finder (clic droit → Télécharger maintenant) puis réessayez.`,
+    color: 'warning' as const,
+    duration: 7000
+  }
+}

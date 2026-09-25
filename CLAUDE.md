@@ -45,8 +45,9 @@ Tauri 2 desktop app that auto-detects dropped media kind (video / image / audio)
 - **ffprobe duration may be 0** on some MOV/MKV streams. Falls back to `nb_frames / r_frame_rate`. If still unknown, `eta_s = 0` and the UI hides the ETA.
 - **Capability JSON changes require Rust rebuild** — `tauri.conf.json` and `capabilities/*.json` are baked in at compile time via `tauri::generate_context!()`.
 - **Binary stdout from the ffmpeg sidecar needs `set_raw_out(true)`** — the shell plugin's default reader splits on newlines and corrupts JPEG bytes. `render_crop_preview` returns them via `tauri::ipc::Response` (raw `ArrayBuffer` in JS, no base64).
-- **Crop rects are fractions (0..1), never pixels.** Preview and encode share the same ffmpeg decoder, so fractions stay valid regardless of EXIF orientation or preview size. The filter is `crop=…` placed before `scale=` in `preset.rs::image_args`.
-- **Drag-drop hit-testing**: Tauri's `position` is in physical pixels; divide by `devicePixelRatio` before comparing with `getBoundingClientRect()` (`utils/dropHitTest.ts`, used by `useDropTargets.ts`).
+- **Crop rects are fractions (0..1), never pixels.** Preview and encode share the same ffmpeg decoder (which autorotates), so the frame stays valid regardless of EXIF orientation or preview size. The filter is `crop=…` placed before `scale=` in `preset.rs::image_args`. **ffprobe does not autorotate**: its `width`/`height` are the stored ones, so `orientSourceSize()` swaps them to match the decoded preview before the px readout and ratio locks use them.
+- **Drag-drop hit-testing**: Tauri's `position` is in physical pixels; divide by `devicePixelRatio` before comparing with `getBoundingClientRect()` (`utils/dropHitTest.ts`). The single Tauri listener is guarded on its in-flight promise (`utils/dropDispatcher.ts`): two zones mount in the same tick, and a guard on the resolved value attaches twice and handles every drop twice.
+- **Composable logic lives in `app/utils/*` cores with injected deps** (`cropSession.ts`, `dropDispatcher.ts`) so Vitest covers it; the `use*` composables are thin Tauri/Nuxt wrappers.
 
 ## Common tasks
 

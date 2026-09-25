@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CropRect } from '~/types/job'
-import { MIN_SIZE, applyRatio, initialRect, moveRect, resizeRect } from './cropGeometry'
+import { MIN_SIZE, applyRatio, initialRect, moveRect, orientSourceSize, resizeRect } from './cropGeometry'
 
 function pxRatio(r: CropRect, aspect: number): number {
   return (r.w * aspect) / r.h
@@ -113,5 +113,20 @@ describe('applyRatio', () => {
 
   it('shrinks the width when the derived height overflows', () => {
     expectRect(applyRatio({ x: 0.1, y: 0.1, w: 0.8, h: 0.8 }, 9 / 16, 1), { x: 0.21875, y: 0, w: 0.5625, h: 1 })
+  })
+})
+
+describe('orientSourceSize', () => {
+  it('keeps ffprobe dimensions when the preview has the same orientation', () => {
+    expect(orientSourceSize({ width: 4032, height: 3024 }, { width: 1200, height: 900 })).toEqual({ width: 4032, height: 3024 })
+  })
+
+  it('swaps them when the decoded preview is rotated 90 degrees', () => {
+    expect(orientSourceSize({ width: 4032, height: 3024 }, { width: 900, height: 1200 })).toEqual({ width: 3024, height: 4032 })
+    expect(orientSourceSize({ width: 3024, height: 4032 }, { width: 1200, height: 900 })).toEqual({ width: 4032, height: 3024 })
+  })
+
+  it('leaves a square source alone', () => {
+    expect(orientSourceSize({ width: 2000, height: 2000 }, { width: 1200, height: 1200 })).toEqual({ width: 2000, height: 2000 })
   })
 })

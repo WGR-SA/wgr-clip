@@ -56,7 +56,11 @@ app/                       Nuxt 4 source (UI)
   types/job.ts             Preset, MediaKind, Job, CustomParams, CropRect TS types
   utils/
     cropGeometry.ts        pure crop-rect math in fractions (move, resize, ratio lock) — vitest
+    cropSession.ts         crop session core (queue, preview loading, cancel-safe) with injected deps — vitest
     dropHitTest.ts         cursor position → drop zone id — vitest
+    dropDispatcher.ts      zone registry + single-listener lifecycle + fallback routing — vitest
+    editorKeys.ts          Enter/Escape filtering for the editor (ignores form fields, key repeat) — vitest
+    icloud.ts              iCloud placeholder detection — vitest
 src-tauri/                 Rust + Tauri config
   src/
     main.rs · lib.rs       entry, plugin registration, AppState
