@@ -153,6 +153,7 @@ pub fn get_diagnostics(
         &j.output,
         0,
         custom,
+        None,
     )
     .into_iter()
     .collect();

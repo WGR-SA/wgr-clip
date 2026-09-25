@@ -47,6 +47,17 @@ pub struct CustomParams {
     pub audio_kbps: u32,
 }
 
+/// Crop region as fractions of the decoded source (0..1). Fractions keep the
+/// rectangle valid whatever the preview size and let ffmpeg resolve pixels
+/// via `iw`/`ih`, so preview and encode always agree.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub struct CropRect {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum MediaKind {

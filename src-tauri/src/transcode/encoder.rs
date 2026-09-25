@@ -111,7 +111,7 @@ async fn try_encode(
     probed: &crate::transcode::probe::ProbeResult,
 ) -> Result<EncodeOutcome, (JobError, Vec<String>)> {
     let duration_us = probed.duration_us;
-    let args = build_args(kind, preset, hw, input, output, probed.height, custom);
+    let args = build_args(kind, preset, hw, input, output, probed.height, custom, None);
     log::info!(target: "transcode", "ffmpeg argv ({hw:?}) for job {job_id}: {args:?}");
 
     let cmd = match app.shell().sidecar("ffmpeg") {

@@ -1,4 +1,4 @@
-use super::{CustomParams, MediaKind, Preset};
+use super::{CropRect, CustomParams, MediaKind, Preset};
 use crate::hw_accel::HwAccel;
 use std::path::Path;
 
@@ -13,10 +13,11 @@ pub fn build_args(
     output: &Path,
     input_height: u32,
     custom: Option<CustomParams>,
+    crop: Option<CropRect>,
 ) -> Vec<String> {
     match kind {
         MediaKind::Video => video_args(preset, hw, input, output, input_height, custom),
-        MediaKind::Image => image_args(preset, input, output, custom),
+        MediaKind::Image => image_args(preset, input, output, custom, crop),
         MediaKind::Audio => audio_args(preset, input, output, custom),
     }
 }
@@ -234,9 +235,28 @@ fn qsv_quality(p: Preset) -> String {
 
 // --- Image ----------------------------------------------------------------
 
-/// Image args: scale-down with aspect ratio preserved, JPEG output via mjpeg
-/// encoder with quality controlled by `-q:v` (1-31, lower = better).
-fn image_args(preset: Preset, input: &Path, output: &Path, custom: Option<CustomParams>) -> Vec<String> {
+/// ffmpeg crop expression from a fractional rect. Width/height are forced
+/// even because the JPEG output is yuvj420p.
+pub fn crop_filter(rect: CropRect) -> String {
+    format!(
+        "crop=trunc(iw*{w:.6}/2)*2:trunc(ih*{h:.6}/2)*2:trunc(iw*{x:.6}):trunc(ih*{y:.6})",
+        w = rect.w,
+        h = rect.h,
+        x = rect.x,
+        y = rect.y
+    )
+}
+
+/// Image args: optional crop, then scale-down with aspect ratio preserved,
+/// JPEG output via mjpeg encoder with quality controlled by `-q:v` (1-31,
+/// lower = better).
+fn image_args(
+    preset: Preset,
+    input: &Path,
+    output: &Path,
+    custom: Option<CustomParams>,
+    crop: Option<CropRect>,
+) -> Vec<String> {
     let max_dim: u32 = match preset {
         Preset::Web1080p => 2000,
         Preset::FourK => 4000,
@@ -268,13 +288,20 @@ fn image_args(preset: Preset, input: &Path, output: &Path, custom: Option<Custom
     a.push("-i".into());
     a.push(input.display().to_string());
 
+    let mut filters: Vec<String> = Vec::new();
+    if let Some(rect) = crop {
+        filters.push(crop_filter(rect));
+    }
     if max_dim > 0 {
         // Fit within a max_dim square preserving aspect; only downscale (no upscale).
-        a.push("-vf".into());
-        a.push(format!(
+        filters.push(format!(
             "scale='if(gte(iw,ih),min({m},iw),-2)':'if(gte(iw,ih),-2,min({m},ih))'",
             m = max_dim
         ));
+    }
+    if !filters.is_empty() {
+        a.push("-vf".into());
+        a.push(filters.join(","));
     }
 
     a.extend([
@@ -330,4 +357,49 @@ fn audio_args(preset: Preset, input: &Path, output: &Path, custom: Option<Custom
     ]);
     a.push(output.display().to_string());
     a
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rect() -> CropRect {
+        CropRect { x: 0.25, y: 0.1, w: 0.5, h: 0.8 }
+    }
+
+    fn vf(args: &[String]) -> Option<String> {
+        args.iter().position(|a| a == "-vf").map(|i| args[i + 1].clone())
+    }
+
+    #[test]
+    fn crop_filter_formats_fractions_with_even_size() {
+        assert_eq!(
+            crop_filter(rect()),
+            "crop=trunc(iw*0.500000/2)*2:trunc(ih*0.800000/2)*2:trunc(iw*0.250000):trunc(ih*0.100000)"
+        );
+    }
+
+    #[test]
+    fn image_args_crop_precedes_scale() {
+        let a = image_args(Preset::Web1080p, Path::new("in.jpg"), Path::new("out.jpg"), None, Some(rect()));
+        let f = vf(&a).expect("-vf present");
+        assert!(f.starts_with("crop="), "{f}");
+        assert!(f.contains(",scale="), "{f}");
+    }
+
+    #[test]
+    fn image_args_crop_alone_when_preset_has_no_max_dim() {
+        let a = image_args(Preset::Source, Path::new("in.jpg"), Path::new("out.jpg"), None, Some(rect()));
+        let f = vf(&a).expect("-vf present");
+        assert!(f.starts_with("crop="), "{f}");
+        assert!(!f.contains("scale="), "{f}");
+    }
+
+    #[test]
+    fn image_args_without_crop_keep_current_behaviour() {
+        let source = image_args(Preset::Source, Path::new("in.jpg"), Path::new("out.jpg"), None, None);
+        assert!(vf(&source).is_none());
+        let web = image_args(Preset::Web1080p, Path::new("in.jpg"), Path::new("out.jpg"), None, None);
+        assert!(vf(&web).unwrap().starts_with("scale="));
+    }
 }
