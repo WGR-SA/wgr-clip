@@ -1,78 +1,41 @@
 <script setup lang="ts">
-import { getCurrentWebview } from '@tauri-apps/api/webview'
-import type { UnlistenFn } from '@tauri-apps/api/event'
+const props = defineProps<{ id: string, title: string, hint: string, icon: string }>()
+const emit = defineEmits<{ drop: [paths: string[]], click: [] }>()
 
-const queue = useTranscodeQueue()
-const isHover = ref(false)
-let unlisten: UnlistenFn | null = null
+const { hoveredId, register } = useDropTargets()
+const el = ref<HTMLElement | null>(null)
+const isHover = computed(() => hoveredId.value === props.id)
+let unregister: (() => void) | null = null
 
-onMounted(async () => {
-  console.log('[DropZone] attaching drag/drop listener')
-  try {
-    unlisten = await getCurrentWebview().onDragDropEvent((event) => {
-      console.log('[DropZone] event:', event.payload.type, event.payload)
-      const t = event.payload.type
-      if (t === 'enter' || t === 'over') {
-        isHover.value = true
-      } else if (t === 'leave') {
-        isHover.value = false
-      } else if (t === 'drop') {
-        isHover.value = false
-        const paths = (event.payload as { paths?: string[] }).paths ?? []
-        console.log('[DropZone] dropped paths:', paths)
-        if (paths.length === 0) {
-          useToast().add({
-            title: 'Drop vide',
-            description: 'Aucun chemin de fichier reçu. Essayez un autre dossier.',
-            color: 'warning'
-          })
-          return
-        }
-        queue.addInputs(paths).catch((e) => {
-          console.error('[DropZone] addInputs failed', e)
-          useToast().add({
-            title: 'Erreur',
-            description: String(e),
-            color: 'error'
-          })
-        })
-      }
-    })
-    console.log('[DropZone] listener attached')
-  } catch (e) {
-    console.error('[DropZone] failed to attach listener', e)
-    useToast().add({
-      title: 'Drag-drop indisponible',
-      description: 'Le listener Tauri n\'a pas pu être attaché. Essayez de relancer l\'app.',
-      color: 'error'
-    })
-  }
+onMounted(() => {
+  unregister = register({ id: props.id, el, onDrop: paths => emit('drop', paths) })
 })
 
 onBeforeUnmount(() => {
-  unlisten?.()
-  unlisten = null
+  unregister?.()
+  unregister = null
 })
 </script>
 
 <template>
   <button
+    ref="el"
     type="button"
     class="dropzone"
     :class="{ 'dropzone--hover': isHover }"
-    aria-label="Déposez vos fichiers ou cliquez pour parcourir"
-    @click="queue.pickInputFiles()"
+    :aria-label="title"
+    @click="emit('click')"
   >
     <div class="dropzone__content">
       <UIcon
-        name="i-lucide-arrow-down-to-line"
+        :name="icon"
         class="dropzone__icon"
       />
       <h2 class="dropzone__title">
-        Déposez ou cliquez pour parcourir
+        {{ title }}
       </h2>
       <p class="dropzone__hint">
-        Vidéos, images, audio. Compression web en un drag.
+        {{ hint }}
       </p>
     </div>
   </button>
@@ -84,9 +47,9 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  min-height: 160px;
-  padding: 1.5rem 1.25rem;
+  flex: 1 1 260px;
+  min-height: 140px;
+  padding: 1.25rem 1rem;
   border: 2px dashed #3a3a3a;
   border-radius: 14px;
   background: #1c1c1c;
@@ -121,8 +84,8 @@ onBeforeUnmount(() => {
 }
 
 .dropzone__icon {
-  width: 2rem;
-  height: 2rem;
+  width: 1.75rem;
+  height: 1.75rem;
   color: var(--color-icterine-400);
   opacity: 0.85;
   margin-bottom: 0.15rem;
@@ -131,14 +94,14 @@ onBeforeUnmount(() => {
 .dropzone__title {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 1.35rem;
+  font-size: 1.15rem;
   letter-spacing: -0.01em;
   color: #FDF7F1;
   margin: 0;
 }
 
 .dropzone__hint {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: #a8a8a8;
   margin: 0;
 }
