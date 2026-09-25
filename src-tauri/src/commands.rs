@@ -56,6 +56,9 @@ pub struct StartJobsArgs {
     pub preset: Preset,
     #[serde(default)]
     pub custom: Option<CustomParams>,
+    /// Output filename suffix for user-imported presets (their id).
+    #[serde(default)]
+    pub slug: Option<String>,
     pub output_dir: Option<PathBuf>,
 }
 
@@ -69,7 +72,7 @@ pub fn start_jobs(state: State<'_, AppState>, args: StartJobsArgs) -> Result<Vec
             None => default_output_dir(&input),
         };
         std::fs::create_dir_all(&dir).map_err(|e| AppError::Other(e.to_string()))?;
-        let output = encoder::resolve_output_path(&input, &dir, args.preset, kind);
+        let output = encoder::resolve_output_path(&input, &dir, args.preset, kind, args.slug.as_deref());
         let id = state
             .queue
             .enqueue(input, output, args.preset, kind, args.custom);

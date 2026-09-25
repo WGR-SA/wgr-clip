@@ -23,7 +23,9 @@ Tauri 2 desktop app that auto-detects dropped media kind (video / image / audio)
 
 ## Where things live
 
-- **Frontend** → `app/`. Components in `app/components/`, composables in `app/composables/`, types in `app/types/`.
+- **Frontend** → `app/`. Components in `app/components/`, composables in `app/composables/`, types in `app/types/`, pure helpers in `app/utils/` (Nuxt auto-imports them; keep them free of Tauri/Nuxt imports so vitest can run them).
+- **User presets** → schema + conversion in `app/utils/userPresets.ts`, import/persistence in `app/composables/useUserPresets.ts`, reference file `presets/example.json`. They ride the `Preset::Custom` path: `toCustomParams()` fills a `CustomParams`, the preset `id` goes to `start_jobs` as `slug` for the output suffix.
+- **Tests** → `tests/*.test.ts` (vitest, `npm test`) and `#[cfg(test)]` modules in `preset.rs`, `mod.rs`, `encoder.rs` (`cd src-tauri && cargo test`).
 - **Backend** → `src-tauri/src/`. Modules: `transcode/{mod,probe,encoder,preset,queue}.rs`, `commands.rs`, `errors.rs`, `hw_accel.rs`, `lib.rs`.
 - **Sidecars** → `src-tauri/binaries/ffmpeg-<triple>` (gitignored). Fetched by `scripts/rename-sidecars.mjs` from evermeet.cx (mac) and BtbN (win).
 - **Capabilities** → `src-tauri/capabilities/default.json`. Adding a new Tauri plugin requires adding its `<plugin>:default` permission here AND registering it in `lib.rs`.
@@ -43,11 +45,14 @@ Tauri 2 desktop app that auto-detects dropped media kind (video / image / audio)
 - **Cancel race on Windows**: after `child.kill()`, sleep 100ms before `remove_file` to dodge file-lock errors. 3-retry backoff in `cleanup_partial`.
 - **ffprobe duration may be 0** on some MOV/MKV streams. Falls back to `nb_frames / r_frame_rate`. If still unknown, `eta_s = 0` and the UI hides the ETA.
 - **Capability JSON changes require Rust rebuild** — `tauri.conf.json` and `capabilities/*.json` are baked in at compile time via `tauri::generate_context!()`.
+- **Files picked with the dialog plugin are auto-added to the fs scope** (`allow_file` in tauri-plugin-dialog). That is why `readTextFile` on an imported preset file works with only `fs:allow-read-text-file` and no scope entry.
+- **A longest-side cap D is the same as fitting in a D×D box.** `fit_filter()` in `preset.rs` covers both video and image scaling; the legacy `image_max_dim` setting is migrated to `image_max_width/height` in `useSettingsStore`.
 
 ## Common tasks
 
 - **Add a Tauri plugin**: add to `Cargo.toml` deps, register in `lib.rs` builder, add `<plugin>:default` to `capabilities/default.json`, add the JS package to `package.json` if needed.
-- **Change preset behavior**: edit `src-tauri/src/transcode/preset.rs::build_args`. Frontend label changes go in `app/components/PresetSelector.vue::itemsByKind`.
+- **Change preset behavior**: edit `src-tauri/src/transcode/preset.rs::build_args` and update its tests. Frontend label changes go in `app/components/PresetSelector.vue::itemsByKind`.
+- **Change the preset file format**: edit the zod schema in `app/utils/userPresets.ts`, add a case to `tests/userPresets.test.ts`, refresh `presets/example.json` and the README table.
 - **Regenerate icons**: `node scripts/generate-icon.mjs && npx tauri icon src-tauri/icons/icon-1024.png`. Use `--label X` for sibling apps.
 - **Test the full pipeline locally**: `npm run tauri:dev`, drop a `.mov`, verify hw_accel detected in dev log, watch progress events fire at ~4 Hz.
 

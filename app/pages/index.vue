@@ -19,6 +19,7 @@ useHead({ title: 'wgr-clip' })
     </section>
 
     <CustomParamsPanel />
+    <PresetManagerModal />
 
     <DropZone />
 

@@ -390,21 +390,23 @@ fn emit_cancelled(app: &AppHandle, job_id: Uuid) {
     let _ = app.emit(EV_CANCELLED, &JobCancelledEvent { job_id });
 }
 
-/// Resolve an output path: `<input-stem>_<preset>.<ext>` in `output_dir`,
-/// where `<ext>` depends on the media kind. Appends `_2`, `_3`, … on
-/// collision so we never overwrite existing files.
+/// Resolve an output path: `<input-stem>_<suffix>.<ext>` in `output_dir`,
+/// where `<ext>` depends on the media kind and `<suffix>` is the user preset
+/// slug when one is given, the built-in preset slug otherwise. Appends `_2`,
+/// `_3`, … on collision so we never overwrite existing files.
 pub fn resolve_output_path(
     input: &Path,
     output_dir: &Path,
     preset: Preset,
     kind: MediaKind,
+    slug: Option<&str>,
 ) -> PathBuf {
     let stem = input
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| "output".into());
     let ext = kind.output_ext();
-    let base = format!("{stem}_{}", preset.slug());
+    let base = format!("{stem}_{}", slug.unwrap_or(preset.slug()));
     let mut candidate = output_dir.join(format!("{base}.{ext}"));
     let mut n = 2;
     while candidate.exists() {
@@ -412,4 +414,31 @@ pub fn resolve_output_path(
         n += 1;
     }
     candidate
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_output_path;
+    use crate::transcode::{MediaKind, Preset};
+    use std::path::Path;
+
+    const DIR: &str = "/wgr-clip-tests/does-not-exist";
+
+    #[test]
+    fn output_suffix_defaults_to_preset_slug() {
+        let out = resolve_output_path(Path::new("/in/photo.png"), Path::new(DIR), Preset::Custom, MediaKind::Image, None);
+        assert_eq!(out, Path::new("/wgr-clip-tests/does-not-exist/photo_custom.jpg"));
+    }
+
+    #[test]
+    fn output_suffix_uses_user_preset_slug_when_given() {
+        let out = resolve_output_path(Path::new("/in/photo.png"), Path::new(DIR), Preset::Custom, MediaKind::Image, Some("shop-800"));
+        assert_eq!(out, Path::new("/wgr-clip-tests/does-not-exist/photo_shop-800.jpg"));
+    }
+
+    #[test]
+    fn output_extension_follows_media_kind_not_input() {
+        let out = resolve_output_path(Path::new("/in/clip.mov"), Path::new(DIR), Preset::Web1080p, MediaKind::Video, None);
+        assert_eq!(out, Path::new("/wgr-clip-tests/does-not-exist/clip_web.mp4"));
+    }
 }

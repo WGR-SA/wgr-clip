@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import type { MediaKind, Preset } from '~/types/job'
+import type { MediaKind, PresetSelection } from '~/types/job'
+import { describeUserPreset, userSelection } from '~/utils/userPresets'
 
 const props = defineProps<{ kind: MediaKind }>()
 
 const queue = useTranscodeQueue()
+const userPresets = useUserPresets()
+
+const MANAGE = 'manage'
 
 interface PresetOption {
-  value: Preset
+  value: PresetSelection | typeof MANAGE
   label: string
   hint: string
+  icon?: string
 }
 
 const itemsByKind: Record<MediaKind, PresetOption[]> = {
@@ -32,7 +37,25 @@ const itemsByKind: Record<MediaKind, PresetOption[]> = {
   ]
 }
 
-const items = computed(() => itemsByKind[props.kind])
+const manageOption: PresetOption = {
+  value: MANAGE,
+  label: 'Gérer les presets…',
+  hint: 'Importer un fichier JSON, supprimer',
+  icon: 'i-lucide-settings-2'
+}
+
+// Groups render with a separator between them: built-ins, imported, manage.
+const items = computed<PresetOption[][]>(() => {
+  const imported = userPresets.forKind(props.kind).map<PresetOption>(p => ({
+    value: userSelection(p.id),
+    label: p.name,
+    hint: describeUserPreset(p)
+  }))
+  const groups = [itemsByKind[props.kind]]
+  if (imported.length > 0) groups.push(imported)
+  groups.push([manageOption])
+  return groups
+})
 
 const kindMeta: Record<MediaKind, { caption: string, icon: string }> = {
   video: { caption: 'Vidéo', icon: 'i-lucide-film' },
@@ -40,15 +63,18 @@ const kindMeta: Record<MediaKind, { caption: string, icon: string }> = {
   audio: { caption: 'Audio', icon: 'i-lucide-music' }
 }
 
-const currentValue = computed<Preset>(() => {
+const currentValue = computed<PresetSelection>(() => {
   if (props.kind === 'video') return queue.videoPreset.value
   if (props.kind === 'image') return queue.imagePreset.value
   return queue.audioPreset.value
 })
 
 const selected = computed<PresetOption>({
-  get: () => items.value.find(i => i.value === currentValue.value) ?? items.value[0]!,
-  set: (v) => queue.setPreset(props.kind, v.value)
+  get: () => items.value.flat().find(i => i.value === currentValue.value) ?? itemsByKind[props.kind][0]!,
+  set: (v) => {
+    if (v.value === MANAGE) userPresets.openManager()
+    else queue.setPreset(props.kind, v.value)
+  }
 })
 
 const meta = computed(() => kindMeta[props.kind])
@@ -74,7 +100,14 @@ const meta = computed(() => kindMeta[props.kind])
     </template>
     <template #item="{ item }">
       <span class="preset__option">
-        <strong>{{ item.label }}</strong>
+        <strong class="preset__option-label">
+          <UIcon
+            v-if="item.icon"
+            :name="item.icon"
+            class="preset__option-icon"
+          />
+          {{ item.label }}
+        </strong>
         <span class="preset__hint">{{ item.hint }}</span>
       </span>
     </template>
@@ -132,6 +165,18 @@ const meta = computed(() => kindMeta[props.kind])
   padding: 0.15rem 0;
 }
 
+.preset__option-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.preset__option-icon {
+  width: 0.85rem;
+  height: 0.85rem;
+  color: var(--color-icterine-400);
+}
+
 .preset__hint {
   display: block;
   font-size: 0.72rem;
@@ -143,5 +188,7 @@ const meta = computed(() => kindMeta[props.kind])
    for our compact pill triggers. Force a sensible reading width. */
 :global(.preset__popover) {
   min-width: 280px !important;
+  /* Default max-h-60 hides the 5th entry (Gérer les presets…) behind a scroll. */
+  max-height: min(70vh, 34rem) !important;
 }
 </style>
