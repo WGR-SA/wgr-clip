@@ -38,7 +38,11 @@ function onCropDrop(paths: string[]) {
 
     <CustomParamsPanel />
 
-    <div class="page__zones">
+    <CropEditor v-if="crop.active.value" />
+    <div
+      v-else
+      class="page__zones"
+    >
       <DropZone
         :id="CONVERT_ZONE_ID"
         title="Déposez ou cliquez pour parcourir"
