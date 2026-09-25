@@ -1,5 +1,5 @@
 use super::{
-    preset::build_args, probe::probe, CustomParams, JobCancelledEvent, JobDoneEvent, JobErrorEvent,
+    preset::build_args, probe::probe, CropRect, CustomParams, JobCancelledEvent, JobDoneEvent, JobErrorEvent,
     MediaKind, Preset, ProgressTick,
 };
 use crate::errors::JobError;
@@ -36,6 +36,7 @@ pub async fn run_job(
     preset: Preset,
     kind: MediaKind,
     custom: Option<CustomParams>,
+    crop: Option<CropRect>,
     hw: HwAccel,
     cancel: CancellationToken,
 ) -> Result<EncodeOutcome, JobError> {
@@ -62,7 +63,7 @@ pub async fn run_job(
     // Try hardware first; on FfmpegCrashed for video, fall back to libx264.
     // (Image / audio paths don't use the h264 hw encoder so the retry never
     // fires for them.)
-    let attempt = try_encode(&app, job_id, input, output, preset, kind, custom, hw, &cancel, &probed).await;
+    let attempt = try_encode(&app, job_id, input, output, preset, kind, custom, crop, hw, &cancel, &probed).await;
 
     match attempt {
         Ok(outcome) => Ok(outcome),
@@ -75,7 +76,7 @@ pub async fn run_job(
                 "hw encoder {hw:?} crashed (exit {exit_code}) on job {job_id} — retrying with libx264"
             );
             cleanup_partial(output).await;
-            match try_encode(&app, job_id, input, output, preset, kind, custom, HwAccel::Software, &cancel, &probed).await {
+            match try_encode(&app, job_id, input, output, preset, kind, custom, crop, HwAccel::Software, &cancel, &probed).await {
                 Ok(outcome) => Ok(outcome),
                 Err((e, tail)) => {
                     let _ = stderr_tail;
@@ -106,12 +107,13 @@ async fn try_encode(
     preset: Preset,
     kind: MediaKind,
     custom: Option<CustomParams>,
+    crop: Option<CropRect>,
     hw: HwAccel,
     cancel: &CancellationToken,
     probed: &crate::transcode::probe::ProbeResult,
 ) -> Result<EncodeOutcome, (JobError, Vec<String>)> {
     let duration_us = probed.duration_us;
-    let args = build_args(kind, preset, hw, input, output, probed.height, custom, None);
+    let args = build_args(kind, preset, hw, input, output, probed.height, custom, crop);
     log::info!(target: "transcode", "ffmpeg argv ({hw:?}) for job {job_id}: {args:?}");
 
     let cmd = match app.shell().sidecar("ffmpeg") {
@@ -398,13 +400,18 @@ pub fn resolve_output_path(
     output_dir: &Path,
     preset: Preset,
     kind: MediaKind,
+    cropped: bool,
 ) -> PathBuf {
     let stem = input
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| "output".into());
     let ext = kind.output_ext();
-    let base = format!("{stem}_{}", preset.slug());
+    let base = if cropped {
+        format!("{stem}_crop_{}", preset.slug())
+    } else {
+        format!("{stem}_{}", preset.slug())
+    };
     let mut candidate = output_dir.join(format!("{base}.{ext}"));
     let mut n = 2;
     while candidate.exists() {
@@ -412,4 +419,34 @@ pub fn resolve_output_path(
         n += 1;
     }
     candidate
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_dir() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("wgr-clip-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn cropped_output_gets_crop_infix() {
+        let dir = temp_dir();
+        let cropped = resolve_output_path(Path::new("/pics/photo.HEIC"), &dir, Preset::Web1080p, MediaKind::Image, true);
+        assert_eq!(cropped.file_name().unwrap().to_str().unwrap(), "photo_crop_web.jpg");
+        let plain = resolve_output_path(Path::new("/pics/photo.HEIC"), &dir, Preset::Web1080p, MediaKind::Image, false);
+        assert_eq!(plain.file_name().unwrap().to_str().unwrap(), "photo_web.jpg");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn cropped_output_never_overwrites_an_existing_file() {
+        let dir = temp_dir();
+        std::fs::write(dir.join("photo_crop_web.jpg"), b"x").unwrap();
+        let second = resolve_output_path(Path::new("/pics/photo.jpg"), &dir, Preset::Web1080p, MediaKind::Image, true);
+        assert_eq!(second.file_name().unwrap().to_str().unwrap(), "photo_crop_web_2.jpg");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 }

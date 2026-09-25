@@ -1,5 +1,5 @@
 use crate::errors::AppError;
-use crate::transcode::{encoder, CustomParams, Job, JobDiagnostics, MediaKind, Preset};
+use crate::transcode::{encoder, CropRect, CustomParams, Job, JobDiagnostics, MediaKind, Preset};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -57,6 +57,10 @@ pub struct StartJobsArgs {
     #[serde(default)]
     pub custom: Option<CustomParams>,
     pub output_dir: Option<PathBuf>,
+    /// Applies to every input of the call; the frontend sends one input per
+    /// cropped job.
+    #[serde(default)]
+    pub crop: Option<CropRect>,
 }
 
 #[tauri::command]
@@ -69,10 +73,10 @@ pub fn start_jobs(state: State<'_, AppState>, args: StartJobsArgs) -> Result<Vec
             None => default_output_dir(&input),
         };
         std::fs::create_dir_all(&dir).map_err(|e| AppError::Other(e.to_string()))?;
-        let output = encoder::resolve_output_path(&input, &dir, args.preset, kind);
+        let output = encoder::resolve_output_path(&input, &dir, args.preset, kind, args.crop.is_some());
         let id = state
             .queue
-            .enqueue(input, output, args.preset, kind, args.custom);
+            .enqueue(input, output, args.preset, kind, args.custom, args.crop);
         ids.push(id);
     }
     Ok(ids)
@@ -109,18 +113,19 @@ pub fn list_jobs(state: State<'_, AppState>) -> Vec<Job> {
 
 #[tauri::command]
 pub fn retry_job(state: State<'_, AppState>, id: Uuid) -> Result<Uuid, AppError> {
-    let (input, output, preset, kind, custom) = match state.queue.jobs.get(&id) {
+    let (input, output, preset, kind, custom, crop) = match state.queue.jobs.get(&id) {
         Some(j) => (
             j.input.clone(),
             j.output.clone(),
             j.preset,
             j.kind,
             j.custom,
+            j.crop,
         ),
         None => return Err(AppError::Other(format!("job {id} not found"))),
     };
     state.queue.jobs.remove(&id);
-    let new_id = state.queue.enqueue(input, output, preset, kind, custom);
+    let new_id = state.queue.enqueue(input, output, preset, kind, custom, crop);
     Ok(new_id)
 }
 
@@ -143,6 +148,7 @@ pub fn get_diagnostics(
     let preset = j.preset;
     let kind = j.kind;
     let custom = j.custom;
+    let crop = j.crop;
     // Best-effort: we don't re-probe here, height defaults trigger the
     // 1080p bitrate row which is the most common case.
     let args = crate::transcode::preset::build_args(
@@ -153,7 +159,7 @@ pub fn get_diagnostics(
         &j.output,
         0,
         custom,
-        None,
+        crop,
     )
     .into_iter()
     .collect();

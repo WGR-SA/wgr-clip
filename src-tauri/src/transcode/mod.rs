@@ -114,6 +114,7 @@ pub struct Job {
     pub preset: Preset,
     pub kind: MediaKind,
     pub custom: Option<CustomParams>,
+    pub crop: Option<CropRect>,
     pub status: JobStatus,
     pub progress: f32,
     pub speed_x: f32,
@@ -131,6 +132,7 @@ impl Job {
         preset: Preset,
         kind: MediaKind,
         custom: Option<CustomParams>,
+        crop: Option<CropRect>,
     ) -> Self {
         Self {
             id: Uuid::new_v4(),
@@ -139,6 +141,7 @@ impl Job {
             preset,
             kind,
             custom,
+            crop,
             status: JobStatus::Pending,
             progress: 0.0,
             speed_x: 0.0,
