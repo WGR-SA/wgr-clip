@@ -3,8 +3,10 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { loadSettings, saveSettings } from '~/composables/useSettingsStore'
+import { icloudDisplayName, splitIcloudStubs } from '~/utils/icloud'
 import type {
   AppInfo,
+  CropRect,
   CustomParams,
   Job,
   JobCancelledEvent,
@@ -25,16 +27,25 @@ export const DEFAULT_CUSTOM: CustomParams = {
 }
 
 const VIDEO_EXTS = ['mp4', 'mov', 'mkv', 'avi', 'webm', 'm4v', 'flv', 'wmv', 'mts', 'm2ts', 'ts', '3gp']
-const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'heif', 'tif', 'tiff', 'bmp', 'gif']
+export const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'heif', 'tif', 'tiff', 'bmp', 'gif']
 const AUDIO_EXTS = ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'oga', 'opus', 'wma', 'aiff', 'aif']
 
-function detectKind (path: string): MediaKind {
+export function detectKind(path: string): MediaKind {
   const m = path.toLowerCase().match(/\.([^./\\]+)$/)
   const ext = (m && m[1]) ? m[1] : ''
   if (IMAGE_EXTS.includes(ext)) return 'image'
   if (AUDIO_EXTS.includes(ext)) return 'audio'
   if (VIDEO_EXTS.includes(ext)) return 'video'
   return 'video'
+}
+
+export function toastIcloudStubs(stubs: string[]) {
+  useToast().add({
+    title: 'Fichier iCloud non téléchargé',
+    description: `${stubs.map(icloudDisplayName).join(', ')} : ouvrez-le dans Finder (clic droit → Télécharger maintenant) puis réessayez.`,
+    color: 'warning',
+    duration: 7000
+  })
 }
 
 interface QueueState {
@@ -49,7 +60,7 @@ interface QueueState {
   unlisteners: UnlistenFn[]
 }
 
-function makeJob (id: string, input: string, output: string, preset: Preset, kind?: MediaKind, custom?: CustomParams | null): Job {
+function makeJob(id: string, input: string, output: string, preset: Preset, kind?: MediaKind, custom?: CustomParams | null, crop?: CropRect | null): Job {
   return {
     id,
     input,
@@ -57,7 +68,7 @@ function makeJob (id: string, input: string, output: string, preset: Preset, kin
     preset,
     kind: kind ?? detectKind(input),
     custom: custom ?? null,
-    crop: null,
+    crop: crop ?? null,
     status: { state: 'pending' },
     progress: 0,
     speed_x: 0,
@@ -196,26 +207,10 @@ export function useTranscodeQueue () {
     console.log('[queue] addInputs called with', rawPaths.length, 'paths', rawPaths)
     if (rawPaths.length === 0) return
 
-    // iCloud Drive placeholders: tiny stubs named `.<original>.<ext>.icloud`
-    // that don't actually contain the file content. ffmpeg can't read them —
-    // surface a specific message so the user knows what to do.
-    const icloudStubs = rawPaths.filter(p => p.toLowerCase().endsWith('.icloud'))
-    if (icloudStubs.length > 0) {
-      const names = icloudStubs.map(p => {
-        const base = p.split(/[/\\]/).pop() ?? p
-        // .Elouan.wav.icloud → Elouan.wav
-        return base.replace(/^\./, '').replace(/\.icloud$/i, '')
-      }).join(', ')
-      useToast().add({
-        title: 'Fichier iCloud non téléchargé',
-        description: `${names} : ouvrez-le dans Finder (clic droit → Télécharger maintenant) puis réessayez.`,
-        color: 'warning',
-        duration: 7000
-      })
-      // If everything dropped is iCloud stubs, abort. Otherwise filter them out and continue.
-      rawPaths = rawPaths.filter(p => !p.toLowerCase().endsWith('.icloud'))
-      if (rawPaths.length === 0) return
-    }
+    const split = splitIcloudStubs(rawPaths)
+    if (split.stubs.length > 0) toastIcloudStubs(split.stubs)
+    rawPaths = split.paths
+    if (rawPaths.length === 0) return
 
     let expanded: string[]
     try {
@@ -281,6 +276,36 @@ export function useTranscodeQueue () {
     state.value.jobs = m
   }
 
+  async function addCroppedInput(input: string, crop: CropRect) {
+    const preset = state.value.imagePreset
+    const customForJob = preset === 'custom' ? { ...state.value.custom } : null
+    let ids: string[]
+    try {
+      ids = await invoke<string[]>('start_jobs', {
+        args: {
+          inputs: [input],
+          preset,
+          custom: customForJob,
+          output_dir: state.value.outputDir,
+          crop
+        }
+      })
+    } catch (err) {
+      console.error('[queue] start_jobs (crop) failed', err)
+      useToast().add({
+        title: 'Échec du démarrage (image)',
+        description: String(err),
+        color: 'error'
+      })
+      return
+    }
+    const id = ids[0]
+    if (!id) return
+    const m = new Map(state.value.jobs)
+    m.set(id, makeJob(id, input, '', preset, 'image', customForJob, crop))
+    state.value.jobs = m
+  }
+
   async function cancel (id: string) {
     await invoke('cancel_job', { id })
   }
@@ -294,7 +319,7 @@ export function useTranscodeQueue () {
     const m = new Map(state.value.jobs)
     const old = m.get(id)
     m.delete(id)
-    if (old) m.set(newId, makeJob(newId, old.input, old.output, old.preset, old.kind, old.custom))
+    if (old) m.set(newId, makeJob(newId, old.input, old.output, old.preset, old.kind, old.custom, old.crop))
     state.value.jobs = m
   }
 
@@ -364,6 +389,7 @@ export function useTranscodeQueue () {
     appInfo: computed(() => state.value.appInfo),
     bindListeners,
     addInputs,
+    addCroppedInput,
     cancel,
     cancelAll,
     retry,
