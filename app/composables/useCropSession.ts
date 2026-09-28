@@ -4,8 +4,6 @@ import type { MediaSize } from '~/types/job'
 import { IMAGE_EXTS, detectKind } from '~/composables/useTranscodeQueue'
 import { createCropSession, initialCropState, type CropState } from '~/utils/cropSession'
 
-export type { CropCurrent } from '~/utils/cropSession'
-
 // Decoded dimensions of the preview: ffmpeg autorotates, ffprobe does not,
 // and this is what tells the two apart.
 async function decodeSize(url: string): Promise<MediaSize> {
