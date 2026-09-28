@@ -70,6 +70,8 @@ pub fn run() {
             commands::get_app_info,
             commands::open_logs_dir,
             commands::reveal_in_folder,
+            commands::render_crop_preview,
+            commands::probe_media_size,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

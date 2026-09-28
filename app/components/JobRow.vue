@@ -9,7 +9,7 @@ const statusLabel = computed(() => {
   switch (props.job.status.state) {
     case 'pending': return 'En attente'
     case 'probing': return 'Analyse'
-    case 'encoding': return props.job.kind === 'image' ? 'Compression' : 'Conversion'
+    case 'encoding': return props.job.kind === 'image' ? (props.job.crop ? 'Recadrage' : 'Compression') : 'Conversion'
     case 'done': return 'Terminé'
     case 'error': return 'Erreur'
     case 'cancelled': return 'Annulé'

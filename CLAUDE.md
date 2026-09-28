@@ -27,7 +27,8 @@ Tauri 2 desktop app that auto-detects dropped media kind (video / image / audio)
 - **Backend** → `src-tauri/src/`. Modules: `transcode/{mod,probe,encoder,preset,queue}.rs`, `commands.rs`, `errors.rs`, `hw_accel.rs`, `lib.rs`.
 - **Sidecars** → `src-tauri/binaries/ffmpeg-<triple>` (gitignored). Fetched by `scripts/rename-sidecars.mjs` from evermeet.cx (mac) and BtbN (win).
 - **Capabilities** → `src-tauri/capabilities/default.json`. Adding a new Tauri plugin requires adding its `<plugin>:default` permission here AND registering it in `lib.rs`.
-- **Plan files** → user keeps implementation plans in `~/.claude/plans/`. The original plan is at `~/.claude/plans/ok-j-ai-besoin-pour-snug-torvalds.md`.
+- **Plan files** → user keeps implementation plans in `~/.claude/plans/`. The original plan is at `~/.claude/plans/ok-j-ai-besoin-pour-snug-torvalds.md`. Specs and plans for later features live in `docs/superpowers/{specs,plans}/`.
+- **Tests** → `npm test` (Vitest, `app/**/*.test.ts`, pure utils only) and `cargo test` in `src-tauri`.
 
 ## Brand assets
 
@@ -43,11 +44,16 @@ Tauri 2 desktop app that auto-detects dropped media kind (video / image / audio)
 - **Cancel race on Windows**: after `child.kill()`, sleep 100ms before `remove_file` to dodge file-lock errors. 3-retry backoff in `cleanup_partial`.
 - **ffprobe duration may be 0** on some MOV/MKV streams. Falls back to `nb_frames / r_frame_rate`. If still unknown, `eta_s = 0` and the UI hides the ETA.
 - **Capability JSON changes require Rust rebuild** — `tauri.conf.json` and `capabilities/*.json` are baked in at compile time via `tauri::generate_context!()`.
+- **Binary stdout from the ffmpeg sidecar needs `set_raw_out(true)`** — the shell plugin's default reader splits on newlines and corrupts JPEG bytes. `render_crop_preview` returns them via `tauri::ipc::Response` (raw `ArrayBuffer` in JS, no base64).
+- **Crop rects are fractions (0..1), never pixels.** Preview and encode share the same ffmpeg decoder (which autorotates), so the frame stays valid regardless of EXIF orientation or preview size. The filter is `crop=…` placed before `scale=` in `preset.rs::image_args`. **ffprobe does not autorotate**: its `width`/`height` are the stored ones, so `orientSourceSize()` swaps them to match the decoded preview before the px readout and ratio locks use them.
+- **Drag-drop hit-testing**: Tauri's `position` is in physical pixels; divide by `devicePixelRatio` before comparing with `getBoundingClientRect()` (`utils/dropHitTest.ts`). The single Tauri listener is guarded on its in-flight promise (`utils/dropDispatcher.ts`): two zones mount in the same tick, and a guard on the resolved value attaches twice and handles every drop twice.
+- **Composable logic lives in `app/utils/*` cores with injected deps** (`cropSession.ts`, `dropDispatcher.ts`) so Vitest covers it; the `use*` composables are thin Tauri/Nuxt wrappers.
 
 ## Common tasks
 
 - **Add a Tauri plugin**: add to `Cargo.toml` deps, register in `lib.rs` builder, add `<plugin>:default` to `capabilities/default.json`, add the JS package to `package.json` if needed.
 - **Change preset behavior**: edit `src-tauri/src/transcode/preset.rs::build_args`. Frontend label changes go in `app/components/PresetSelector.vue::itemsByKind`.
+- **Change the crop editor's ratio presets**: `RATIO_PRESETS` in `app/utils/cropGeometry.ts`.
 - **Regenerate icons**: `node scripts/generate-icon.mjs && npx tauri icon src-tauri/icons/icon-1024.png`. Use `--label X` for sibling apps.
 - **Test the full pipeline locally**: `npm run tauri:dev`, drop a `.mov`, verify hw_accel detected in dev log, watch progress events fire at ~4 Hz.
 

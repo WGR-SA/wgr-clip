@@ -1,4 +1,4 @@
-use super::{encoder, CustomParams, Job, JobStatus, MediaKind, Preset};
+use super::{encoder, CropRect, CustomParams, Job, JobStatus, MediaKind, Preset};
 use crate::hw_accel::HwAccel;
 use dashmap::DashMap;
 use std::path::PathBuf;
@@ -39,13 +39,14 @@ impl JobQueue {
                 cancels_w.insert(id, cancel.clone());
 
                 // Snapshot job inputs before mutating
-                let (input, output, preset, kind, custom) = match jobs_w.get(&id) {
+                let (input, output, preset, kind, custom, crop) = match jobs_w.get(&id) {
                     Some(j) => (
                         j.input.clone(),
                         j.output.clone(),
                         j.preset,
                         j.kind,
                         j.custom,
+                        j.crop,
                     ),
                     None => {
                         drop(permit);
@@ -67,6 +68,7 @@ impl JobQueue {
                     preset,
                     kind,
                     custom,
+                    crop,
                     hw,
                     cancel.clone(),
                 )
@@ -110,8 +112,9 @@ impl JobQueue {
         preset: Preset,
         kind: MediaKind,
         custom: Option<CustomParams>,
+        crop: Option<CropRect>,
     ) -> Uuid {
-        let job = Job::new(input, output, preset, kind, custom);
+        let job = Job::new(input, output, preset, kind, custom, crop);
         let id = job.id;
         self.jobs.insert(id, job);
         let _ = self.tx.send(id);

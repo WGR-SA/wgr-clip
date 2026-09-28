@@ -13,6 +13,8 @@ Drop any media → wgr-clip auto-detects the kind and produces a web-friendly fi
 
 3 presets per kind (Original / Web / High Quality) plus a **Personnalisé** mode for custom dimensions, CRF and bitrates. Multi-file batch with real-time progress, cancellable, error details with copy-diagnostics. Click the dropzone or drop folders — both work.
 
+**Recadrer** : a second drop zone opens an inline crop editor for images (free frame or 1:1 · 4:5 · 3:2 · 16:9 · 9:16 locks). The crop runs before the preset's resize; output is `<name>_crop_<preset>.jpg`.
+
 ## Stack
 - **Tauri 2** + Rust transcode engine
 - **Nuxt 4** + **Nuxt UI 4** (SPA)
@@ -43,17 +45,27 @@ app/                       Nuxt 4 source (UI)
     JobList / JobRow      live progress + actions
     JobErrorPanel         expandable stderr + copy diagnostics
     CustomParamsPanel     advanced inputs when "Personnalisé" is selected
+    CropEditor.vue         inline crop editor (preview + draggable frame + ratio locks)
   composables/
     useTranscodeQueue.ts   reactive Map of jobs + Tauri event listeners
+    useDropTargets.ts      single Tauri drag-drop listener, hit-tests zones by cursor position
+    useCropSession.ts      queue of images to crop, preview loading, confirm/skip/close
     useAutoFit.ts          auto-resize Tauri window to content
     useBatchNotification   fires native notif on batch completion
     useSettingsStore       persists preferences via tauri-plugin-store
-  types/job.ts             Preset, MediaKind, Job, CustomParams TS types
+  types/job.ts             Preset, MediaKind, Job, CustomParams, CropRect TS types
+  utils/
+    cropGeometry.ts        pure crop-rect math in fractions (move, resize, ratio lock) — vitest
+    cropSession.ts         crop session core (queue, preview loading, cancel-safe) with injected deps — vitest
+    dropHitTest.ts         cursor position → drop zone id — vitest
+    dropDispatcher.ts      zone registry + single-listener lifecycle + fallback routing — vitest
+    editorKeys.ts          Enter/Escape filtering for the editor (ignores form fields, key repeat) — vitest
+    icloud.ts              iCloud placeholder detection — vitest
 src-tauri/                 Rust + Tauri config
   src/
     main.rs · lib.rs       entry, plugin registration, AppState
     hw_accel.rs            boot-time h264 encoder detection (videotoolbox / nvenc / qsv / libx264)
-    commands.rs            Tauri commands invoked from JS (start_jobs, expand_paths, etc.)
+    commands.rs            Tauri commands invoked from JS (start_jobs, expand_paths, render_crop_preview, probe_media_size, etc.)
     transcode/
       mod.rs               Job, Preset, MediaKind, CustomParams types
       probe.rs             ffprobe duration + stream metadata

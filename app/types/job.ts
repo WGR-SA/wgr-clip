@@ -14,6 +14,19 @@ export interface CustomParams {
   audio_kbps: number         // 32..320
 }
 
+/** Crop region as fractions (0..1) of the source image. */
+export interface CropRect {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export interface MediaSize {
+  width: number
+  height: number
+}
+
 export type JobStatusState =
   | 'pending'
   | 'probing'
@@ -41,6 +54,7 @@ export interface Job {
   preset: Preset
   kind: MediaKind
   custom: CustomParams | null
+  crop: CropRect | null
   status: { state: JobStatusState }
   progress: number
   speed_x: number

@@ -47,6 +47,17 @@ pub struct CustomParams {
     pub audio_kbps: u32,
 }
 
+/// Crop region as fractions of the decoded source (0..1). Fractions keep the
+/// rectangle valid whatever the preview size and let ffmpeg resolve pixels
+/// via `iw`/`ih`, so preview and encode always agree.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub struct CropRect {
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum MediaKind {
@@ -103,6 +114,7 @@ pub struct Job {
     pub preset: Preset,
     pub kind: MediaKind,
     pub custom: Option<CustomParams>,
+    pub crop: Option<CropRect>,
     pub status: JobStatus,
     pub progress: f32,
     pub speed_x: f32,
@@ -120,6 +132,7 @@ impl Job {
         preset: Preset,
         kind: MediaKind,
         custom: Option<CustomParams>,
+        crop: Option<CropRect>,
     ) -> Self {
         Self {
             id: Uuid::new_v4(),
@@ -128,6 +141,7 @@ impl Job {
             preset,
             kind,
             custom,
+            crop,
             status: JobStatus::Pending,
             progress: 0.0,
             speed_x: 0.0,
