@@ -11,9 +11,13 @@ Drop any media → wgr-clip auto-detects the kind and produces a web-friendly fi
 - **Image** → `.jpg` (resized to a safe max dim, JPEG quality preset)
 - **Audio** → `.mp3` (LAME, universal compat)
 
-3 presets per kind (Original / Web / High Quality) plus a **Personnalisé** mode for custom dimensions, CRF and bitrates. Named presets can also be **imported from JSON files** and stay available across launches (see [Imported presets](#imported-presets)). Multi-file batch with real-time progress, cancellable, error details with copy-diagnostics. Click the dropzone or drop folders — both work.
+A drop **stages** files instead of converting them straight away: they land in a "Prêt à convertir" list grouped by kind, each group carrying its own preset — Original / Web / High Quality / **Personnalisé**, plus any preset **imported from a JSON file** (see [Imported presets](#imported-presets)). One button converts the batch. Nothing is encoded until you press it, so a wrong preset costs a click rather than a re-run.
 
-**Recadrer** : a second drop zone opens an inline crop editor for images (free frame or 1:1 · 4:5 · 3:2 · 16:9 · 9:16 locks). The crop runs before the preset's resize; output is `<name>_crop_<preset>.jpg`.
+Multi-file batch with real-time progress, cancellable, error details with copy-diagnostics. Click the dropzone or drop folders — both work. A group whose encode fails to start stays in the list, ready to retry.
+
+**Recadrer** : staged images can be cropped before conversion — from the group header for every image still uncropped, or per row for one of them. Free frame or 1:1 · 4:5 · 3:2 · 16:9 · 9:16 locks. The crop runs before the preset's resize; output is `<name>_crop_<preset>.jpg`.
+
+Output destination and imported presets live behind the settings button.
 
 ## Stack
 - **Tauri 2** + Rust transcode engine
@@ -68,24 +72,29 @@ Any preset menu ends with **Gérer les presets…**, which opens a manager to im
 ```
 app/                       Nuxt 4 source (UI)
   components/
-    DropZone.vue           drag-drop + click to pick files
+    DropZone.vue           drag-drop + click to pick files (compact once files are staged)
+    StagingPanel.vue       "Prêt à convertir" list, per-kind preset + crop, Convert button
+    StagedRow.vue          one staged file: name, crop badge, crop and remove actions
     PresetSelector.vue     pill dropdowns per media kind
-    DestinationPicker.vue  output folder pill
+    SettingsPanel.vue      slideover: output destination + imported presets
     JobList / JobRow      live progress + actions
     JobErrorPanel         expandable stderr + copy diagnostics
-    CustomParamsPanel     advanced inputs when "Personnalisé" is selected
+    CustomParamsPanel     advanced inputs when "Personnalisé" is selected, for staged kinds only
     CropEditor.vue         inline crop editor (preview + draggable frame + ratio locks)
-    PresetManagerModal    list / delete / import user presets (JSON)
   composables/
-    useTranscodeQueue.ts   reactive Map of jobs + Tauri event listeners
+    useTranscodeQueue.ts   reactive Map of jobs + Tauri event listeners + startStaged
+    useStaging.ts          staged files awaiting conversion, file picker
     useDropTargets.ts      single Tauri drag-drop listener, hit-tests zones by cursor position
     useCropSession.ts      queue of images to crop, preview loading, confirm/skip/close
-    useUserPresets.ts      imported presets (store key `userPresets`) + manager state
+    useUserPresets.ts      imported presets (store key `userPresets`)
     useAutoFit.ts          auto-resize Tauri window to content
     useBatchNotification   fires native notif on batch completion
     useSettingsStore       persists preferences via tauri-plugin-store
   types/job.ts             Preset, PresetSelection, MediaKind, Job, CustomParams, CropRect TS types
   utils/
+    staging.ts             staging core: dedupe, crop attachment, kind grouping — vitest
+    jobStart.ts            staged items → start_jobs calls, one per (kind, crop), sequential — vitest
+    mediaKind.ts           extension → MediaKind, extension lists, kind icons — vitest
     cropGeometry.ts        pure crop-rect math in fractions (move, resize, ratio lock) — vitest
     cropSession.ts         crop session core (queue, preview loading, cancel-safe) with injected deps — vitest
     dropHitTest.ts         cursor position → drop zone id — vitest
