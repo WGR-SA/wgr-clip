@@ -84,8 +84,8 @@ export async function startBatches(items: StagedItem[], deps: JobStartDeps): Pro
     }
     const jobs: StartedJob[] = []
     batch.inputs.forEach((input, i) => {
-      const id = ids[i]
-      if (id) jobs.push({ id, input, kind: batch.kind, preset, custom, crop: batch.crop })
+      const id = ids[i]!
+      jobs.push({ id, input, kind: batch.kind, preset, custom, crop: batch.crop })
     })
     deps.onJobs(jobs)
     started.push(...batch.uids)

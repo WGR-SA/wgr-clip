@@ -65,12 +65,12 @@ describe('startBatches', () => {
     expect(started).toEqual(['1'])
   })
 
-  it('reports each started job with its id, input, kind and crop', async () => {
+  it('reports each started job with its id, input, kind, crop, preset and custom', async () => {
     const h = harness()
     await startBatches([item('1', '/a.jpg', 'image', RECT_A), item('2', '/b.mov', 'video')], h.deps)
     expect(h.jobs).toMatchObject([
-      { id: 'id1', input: '/a.jpg', kind: 'image', crop: RECT_A },
-      { id: 'id2', input: '/b.mov', kind: 'video', crop: null }
+      { id: 'id1', input: '/a.jpg', kind: 'image', crop: RECT_A, preset: 'source', custom: null },
+      { id: 'id2', input: '/b.mov', kind: 'video', crop: null, preset: 'source', custom: null }
     ])
   })
 
