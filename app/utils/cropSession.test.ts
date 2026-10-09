@@ -50,7 +50,6 @@ function harness(overrides: Partial<CropSessionDeps> = {}) {
     previewSize: async () => previewSize,
     toast: t => void toasts.push(t),
     setCrop: vi.fn((input: string, rect: CropRect, cropPx: MediaSize) => void cropped.push({ input, rect, cropPx })),
-    pickImages: async () => [],
     ...overrides
   }
   const state = ref(initialCropState())

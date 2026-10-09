@@ -38,7 +38,6 @@ export interface CropSessionDeps {
   previewSize: (url: string) => Promise<MediaSize>
   toast: (spec: ToastSpec) => void
   setCrop: (input: string, rect: CropRect, cropPx: MediaSize) => void
-  pickImages: () => Promise<string[]>
 }
 
 export function createCropSession(state: Ref<CropState>, deps: CropSessionDeps) {
@@ -70,11 +69,6 @@ export function createCropSession(state: Ref<CropState>, deps: CropSessionDeps) 
     state.value.pending = [...state.value.pending, ...images]
     state.value.total += images.length
     if (!state.value.current && !state.value.loading) await loadNext()
-  }
-
-  async function pickImages() {
-    const paths = await deps.pickImages()
-    if (paths.length > 0) await open(paths)
   }
 
   async function loadNext() {
@@ -183,7 +177,6 @@ export function createCropSession(state: Ref<CropState>, deps: CropSessionDeps) 
     index: computed(() => state.value.index),
     total: computed(() => state.value.total),
     open,
-    pickImages,
     setRect,
     setRatio,
     confirm,

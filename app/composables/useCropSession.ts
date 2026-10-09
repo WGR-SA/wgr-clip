@@ -1,7 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
-import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import type { MediaSize } from '~/types/job'
-import { IMAGE_EXTS, detectKind } from '~/utils/mediaKind'
+import { detectKind } from '~/utils/mediaKind'
 import { createCropSession, initialCropState, type CropState } from '~/utils/cropSession'
 
 // Decoded dimensions of the preview: ffmpeg autorotates, ffprobe does not,
@@ -27,14 +26,6 @@ export function useCropSession() {
     revokeUrl: url => URL.revokeObjectURL(url),
     previewSize: decodeSize,
     toast: spec => toast.add(spec),
-    setCrop: staging.setCrop,
-    pickImages: async () => {
-      const result = await openDialog({
-        multiple: true,
-        filters: [{ name: 'Images', extensions: [...IMAGE_EXTS] }]
-      })
-      if (Array.isArray(result)) return result
-      return typeof result === 'string' ? [result] : []
-    }
+    setCrop: staging.setCrop
   })
 }
