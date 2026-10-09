@@ -96,7 +96,7 @@ describe('startBatches', () => {
     ], h.deps)
     expect(started).toEqual(['1', '3'])
     expect(h.toasts).toHaveLength(1)
-    expect(h.toasts[0]?.title).toBe('Échec du démarrage (video)')
+    expect(h.toasts[0]?.title).toBe('Échec du démarrage (vidéo)')
   })
 
   it('never starts a batch before the previous one has returned', async () => {

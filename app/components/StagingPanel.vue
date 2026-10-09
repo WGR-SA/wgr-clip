@@ -57,6 +57,7 @@ async function convert() {
           color="neutral"
           variant="outline"
           size="xs"
+          :disabled="crop.active.value"
           @click="crop.open(staging.uncroppedImages.value)"
         />
       </div>
@@ -65,6 +66,7 @@ async function convert() {
           v-for="item in g.items"
           :key="item.uid"
           :item="item"
+          :crop-disabled="crop.active.value"
           @crop="crop.open([item.input])"
           @remove="staging.remove(item.uid)"
         />
@@ -160,6 +162,8 @@ async function convert() {
   margin: 0;
   padding: 0;
   list-style: none;
+  max-height: 40vh;
+  overflow-y: auto;
 }
 
 .staging__actions {

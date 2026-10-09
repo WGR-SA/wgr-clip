@@ -42,6 +42,15 @@ describe('createStaging add', () => {
     expect(h.staging.count.value).toBe(1)
   })
 
+  it('resolves with the newly staged inputs, and an empty array once nothing new is staged', async () => {
+    const h = harness({ expandPaths: async () => ['/d/a.jpg', '/d/b.mov'] })
+    expect(await h.staging.add(['/d'])).toEqual(['/d/a.jpg', '/d/b.mov'])
+    expect(await h.staging.add(['/d'])).toEqual([]) // fully deduped
+
+    const rejecting = harness({ expandPaths: async () => [] })
+    expect(await rejecting.staging.add(['/d/notes.txt'])).toEqual([]) // nothing supported
+  })
+
   // Review Focus 1
   it('dedupes against files staged by an earlier drop', async () => {
     const h = harness()

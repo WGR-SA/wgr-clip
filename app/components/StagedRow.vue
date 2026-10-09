@@ -3,7 +3,7 @@ import type { StagedItem } from '~/types/job'
 import { basename } from '~/utils/format'
 import { KIND_ICON } from '~/utils/mediaKind'
 
-const props = defineProps<{ item: StagedItem }>()
+const props = defineProps<{ item: StagedItem, cropDisabled?: boolean }>()
 const emit = defineEmits<{ crop: [], remove: [] }>()
 
 const cropText = computed(() => {
@@ -38,6 +38,7 @@ const cropText = computed(() => {
       color="neutral"
       variant="ghost"
       size="xs"
+      :disabled="cropDisabled"
       :aria-label="`Recadrer ${basename(item.input)}`"
       @click="emit('crop')"
     />

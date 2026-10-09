@@ -31,6 +31,8 @@ export interface StartedJob {
   crop: CropRect | null
 }
 
+const KIND_LABEL: Record<MediaKind, string> = { video: 'vidéo', image: 'image', audio: 'audio' }
+
 export interface JobStartDeps {
   startJobs: (args: StartJobsArgs) => Promise<string[]>
   resolveSelection: (kind: MediaKind) => ResolvedPreset
@@ -60,8 +62,9 @@ export function groupStartBatches(items: StagedItem[]): StartBatch[] {
 export async function startBatches(items: StagedItem[], deps: JobStartDeps): Promise<string[]> {
   const started: string[] = []
   // Sequential on purpose: start_jobs seeds its `claimed` output set from jobs
-  // already in flight, so serialising is what stops a second crop of the same
-  // source from overwriting the first one's file.
+  // already in flight, so serialising is what stops two different sources
+  // sharing a basename (say /a/photo.jpg cropped and /b/photo.jpg not) from
+  // colliding when they land in the same chosen output directory.
   for (const batch of groupStartBatches(items)) {
     const { preset, custom, slug } = deps.resolveSelection(batch.kind)
     let ids: string[]
@@ -76,7 +79,7 @@ export async function startBatches(items: StagedItem[], deps: JobStartDeps): Pro
       })
     } catch (e) {
       deps.toast({
-        title: `Échec du démarrage (${batch.kind})`,
+        title: `Échec du démarrage (${KIND_LABEL[batch.kind]})`,
         description: String(e),
         color: 'error'
       })

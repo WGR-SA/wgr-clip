@@ -39,15 +39,15 @@ function onDrop(paths: string[]) {
       v-else
       :id="CONVERT_ZONE_ID"
       title="Déposez ou cliquez pour parcourir"
-      hint="Vidéos, images, audio. Compression web en un drag."
+      hint="Vidéos, images, audio. Le dépôt prépare les fichiers, la conversion démarre avec le bouton."
       icon="i-lucide-arrow-down-to-line"
       :compact="staging.count.value > 0"
       @drop="onDrop"
       @click="staging.pickFiles().catch(reportError)"
     />
 
-    <StagingPanel />
     <CustomParamsPanel />
+    <StagingPanel />
     <JobList />
 
     <SettingsPanel v-model:open="settingsOpen" />

@@ -60,7 +60,7 @@ export function createCropSession(state: Ref<CropState>, deps: CropSessionDeps) 
     if (rejected.length > 0) {
       deps.toast({
         title: 'Images seulement',
-        description: `Le recadrage ne prend que des images. Ignoré : ${rejected.map(basename).join(', ')}`,
+        description: `Reste dans la liste, mais ne sera pas recadré : ${rejected.map(basename).join(', ')}`,
         color: 'warning'
       })
     }

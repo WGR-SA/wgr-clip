@@ -19,17 +19,17 @@ export interface StagingDeps {
 }
 
 export function createStaging(state: Ref<StagingState>, deps: StagingDeps) {
-  async function add(rawPaths: string[]) {
+  async function add(rawPaths: string[]): Promise<string[]> {
     const split = splitIcloudStubs(rawPaths)
     if (split.stubs.length > 0) deps.toast(icloudToast(split.stubs))
-    if (split.paths.length === 0) return
+    if (split.paths.length === 0) return []
 
     let expanded: string[]
     try {
       expanded = await deps.expandPaths(split.paths)
     } catch (e) {
       deps.toast({ title: 'Erreur de lecture du drop', description: String(e), color: 'error' })
-      return
+      return []
     }
 
     if (expanded.length === 0) {
@@ -38,7 +38,7 @@ export function createStaging(state: Ref<StagingState>, deps: StagingDeps) {
         description: `Formats acceptés : vidéo, image ou audio courants. Reçu : ${split.paths.map(basename).join(', ')}`,
         color: 'warning'
       })
-      return
+      return []
     }
 
     const known = new Set(state.value.items.map(i => i.input))
@@ -49,6 +49,7 @@ export function createStaging(state: Ref<StagingState>, deps: StagingDeps) {
       fresh.push({ uid: deps.newUid(), input, kind: deps.detectKind(input), crop: null, cropPx: null })
     }
     if (fresh.length > 0) state.value.items = [...state.value.items, ...fresh]
+    return fresh.map(i => i.input)
   }
 
   function setCrop(input: string, crop: CropRect, cropPx: MediaSize) {

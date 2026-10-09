@@ -72,6 +72,11 @@ function onKey(e: KeyboardEvent) {
   else crop.close()
 }
 
+function reportError(e: unknown) {
+  console.error('[crop] drop failed', e)
+  useToast().add({ title: 'Erreur', description: String(e), color: 'error' })
+}
+
 let unregister: (() => void) | null = null
 
 onMounted(() => {
@@ -81,7 +86,7 @@ onMounted(() => {
   unregister = register({
     id: CROP_ZONE_ID,
     el: root,
-    onDrop: paths => void staging.add(paths).then(() => crop.open(paths))
+    onDrop: paths => void staging.add(paths).then(staged => crop.open(staged)).catch(reportError)
   })
 })
 
@@ -192,7 +197,7 @@ onBeforeUnmount(() => {
         :disabled="!current"
         @click="crop.confirm()"
       >
-        Recadrer et convertir
+        Valider le recadrage
       </UButton>
     </footer>
   </section>

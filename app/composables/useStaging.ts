@@ -3,6 +3,12 @@ import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import { ALL_MEDIA_EXTS, detectKind } from '~/utils/mediaKind'
 import { createStaging, initialStagingState, type StagingState } from '~/utils/staging'
 
+// The uid never leaves the renderer (not persisted, not sent over IPC), so a
+// plain counter is fine — and safer than crypto.randomUUID, which is
+// secure-context-gated and whose failure mode (undefined in the packaged
+// app's custom scheme) would kill staging entirely on the very first drop.
+let uid = 0
+
 export function useStaging() {
   const state = useState<StagingState>('wgr-clip-staging', initialStagingState)
   const toast = useToast()
@@ -11,7 +17,7 @@ export function useStaging() {
     expandPaths: paths => invoke<string[]>('expand_paths', { paths }),
     detectKind,
     toast: spec => toast.add(spec),
-    newUid: () => crypto.randomUUID()
+    newUid: () => `s${++uid}`
   })
 
   async function pickFiles() {

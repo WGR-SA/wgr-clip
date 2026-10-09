@@ -107,7 +107,7 @@ export interface StagedItem {
   input: string
   kind: MediaKind
   crop: CropRect | null
-  /** Result size in px, filled at confirm time so the row can show a badge. */
+  /** Crop size in source px, before the preset's fit-in-box resize; filled at confirm time so the row can show a badge. */
   cropPx: MediaSize | null
 }
 
