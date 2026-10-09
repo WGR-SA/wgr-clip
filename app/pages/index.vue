@@ -43,7 +43,7 @@ function onDrop(paths: string[]) {
       icon="i-lucide-arrow-down-to-line"
       :compact="staging.count.value > 0"
       @drop="onDrop"
-      @click="staging.pickFiles()"
+      @click="staging.pickFiles().catch(reportError)"
     />
 
     <StagingPanel />

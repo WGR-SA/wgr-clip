@@ -146,12 +146,6 @@ const meta = computed(() => kindMeta[props.kind])
   padding: 0.15rem 0;
 }
 
-.preset__option-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
 .preset__hint {
   display: block;
   font-size: 0.72rem;

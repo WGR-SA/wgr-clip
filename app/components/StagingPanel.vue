@@ -75,6 +75,7 @@ async function convert() {
       <UButton
         color="neutral"
         variant="ghost"
+        :disabled="starting || crop.active.value"
         @click="staging.clear()"
       >
         Tout effacer
@@ -83,7 +84,7 @@ async function convert() {
         color="primary"
         icon="i-lucide-play"
         :loading="starting"
-        :disabled="starting"
+        :disabled="starting || crop.active.value"
         @click="convert()"
       >
         Convertir {{ countLabel }}
