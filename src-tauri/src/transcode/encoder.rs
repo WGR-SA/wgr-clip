@@ -392,15 +392,18 @@ fn emit_cancelled(app: &AppHandle, job_id: Uuid) {
     let _ = app.emit(EV_CANCELLED, &JobCancelledEvent { job_id });
 }
 
-/// Resolve an output path: `<input-stem>_<preset>.<ext>` in `output_dir`,
-/// where `<ext>` depends on the media kind. Appends `_2`, `_3`, … on
-/// collision so we never overwrite existing files.
+/// Resolve an output path: `<input-stem>_<suffix>.<ext>` in `output_dir`,
+/// where `<ext>` depends on the media kind and `<suffix>` is the user preset
+/// slug when one is given, the built-in preset slug otherwise, with a
+/// `crop_` infix when the job is cropped. Appends `_2`, `_3`, … on collision
+/// (on disk or claimed by an in-flight job) so we never overwrite a file.
 pub fn resolve_output_path(
     input: &Path,
     output_dir: &Path,
     preset: Preset,
     kind: MediaKind,
     cropped: bool,
+    slug: Option<&str>,
     claimed: &HashSet<PathBuf>,
 ) -> PathBuf {
     let stem = input
@@ -408,10 +411,11 @@ pub fn resolve_output_path(
         .map(|s| s.to_string_lossy().into_owned())
         .unwrap_or_else(|| "output".into());
     let ext = kind.output_ext();
+    let preset_part = slug.unwrap_or(preset.slug());
     let base = if cropped {
-        format!("{stem}_crop_{}", preset.slug())
+        format!("{stem}_crop_{preset_part}")
     } else {
-        format!("{stem}_{}", preset.slug())
+        format!("{stem}_{preset_part}")
     };
     let mut candidate = output_dir.join(format!("{base}.{ext}"));
     let mut n = 2;
@@ -436,9 +440,9 @@ mod tests {
     #[test]
     fn cropped_output_gets_crop_infix() {
         let dir = temp_dir();
-        let cropped = resolve_output_path(Path::new("/pics/photo.HEIC"), &dir, Preset::Web1080p, MediaKind::Image, true, &HashSet::new());
+        let cropped = resolve_output_path(Path::new("/pics/photo.HEIC"), &dir, Preset::Web1080p, MediaKind::Image, true, None, &HashSet::new());
         assert_eq!(cropped.file_name().unwrap().to_str().unwrap(), "photo_crop_web.jpg");
-        let plain = resolve_output_path(Path::new("/pics/photo.HEIC"), &dir, Preset::Web1080p, MediaKind::Image, false, &HashSet::new());
+        let plain = resolve_output_path(Path::new("/pics/photo.HEIC"), &dir, Preset::Web1080p, MediaKind::Image, false, None, &HashSet::new());
         assert_eq!(plain.file_name().unwrap().to_str().unwrap(), "photo_web.jpg");
         std::fs::remove_dir_all(&dir).unwrap();
     }
@@ -447,7 +451,7 @@ mod tests {
     fn cropped_output_never_overwrites_an_existing_file() {
         let dir = temp_dir();
         std::fs::write(dir.join("photo_crop_web.jpg"), b"x").unwrap();
-        let second = resolve_output_path(Path::new("/pics/photo.jpg"), &dir, Preset::Web1080p, MediaKind::Image, true, &HashSet::new());
+        let second = resolve_output_path(Path::new("/pics/photo.jpg"), &dir, Preset::Web1080p, MediaKind::Image, true, None, &HashSet::new());
         assert_eq!(second.file_name().unwrap().to_str().unwrap(), "photo_crop_web_2.jpg");
         std::fs::remove_dir_all(&dir).unwrap();
     }
@@ -458,8 +462,32 @@ mod tests {
         let mut claimed = HashSet::new();
         claimed.insert(dir.join("photo_crop_web.jpg"));
         claimed.insert(dir.join("photo_crop_web_2.jpg"));
-        let third = resolve_output_path(Path::new("/pics/photo.jpg"), &dir, Preset::Web1080p, MediaKind::Image, true, &claimed);
+        let third = resolve_output_path(Path::new("/pics/photo.jpg"), &dir, Preset::Web1080p, MediaKind::Image, true, None, &claimed);
         assert_eq!(third.file_name().unwrap().to_str().unwrap(), "photo_crop_web_3.jpg");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn output_suffix_defaults_to_preset_slug() {
+        let dir = temp_dir();
+        let out = resolve_output_path(Path::new("/in/photo.png"), &dir, Preset::Custom, MediaKind::Image, false, None, &HashSet::new());
+        assert_eq!(out.file_name().unwrap().to_str().unwrap(), "photo_custom.jpg");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn output_suffix_uses_user_preset_slug_when_given() {
+        let dir = temp_dir();
+        let out = resolve_output_path(Path::new("/in/photo.png"), &dir, Preset::Custom, MediaKind::Image, false, Some("shop-800"), &HashSet::new());
+        assert_eq!(out.file_name().unwrap().to_str().unwrap(), "photo_shop-800.jpg");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn output_extension_follows_media_kind_not_input() {
+        let dir = temp_dir();
+        let out = resolve_output_path(Path::new("/in/clip.mov"), &dir, Preset::Web1080p, MediaKind::Video, false, None, &HashSet::new());
+        assert_eq!(out.file_name().unwrap().to_str().unwrap(), "clip_web.mp4");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

@@ -130,6 +130,9 @@ pub struct StartJobsArgs {
     pub preset: Preset,
     #[serde(default)]
     pub custom: Option<CustomParams>,
+    /// Output filename suffix for user-imported presets (their id).
+    #[serde(default)]
+    pub slug: Option<String>,
     pub output_dir: Option<PathBuf>,
     /// Applies to every input of the call; the frontend sends one input per
     /// cropped job.
@@ -156,7 +159,15 @@ pub fn start_jobs(state: State<'_, AppState>, args: StartJobsArgs) -> Result<Vec
             None => default_output_dir(&input),
         };
         std::fs::create_dir_all(&dir).map_err(|e| AppError::Other(e.to_string()))?;
-        let output = encoder::resolve_output_path(&input, &dir, args.preset, kind, args.crop.is_some(), &claimed);
+        let output = encoder::resolve_output_path(
+            &input,
+            &dir,
+            args.preset,
+            kind,
+            args.crop.is_some(),
+            args.slug.as_deref(),
+            &claimed,
+        );
         claimed.insert(output.clone());
         let id = state
             .queue

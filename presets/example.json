@@ -1,0 +1,32 @@
+{
+  "presets": [
+    {
+      "id": "shop-800",
+      "kind": "image",
+      "name": "Shop 800px",
+      "max_width": 800,
+      "max_height": 800,
+      "quality": 82
+    },
+    {
+      "kind": "image",
+      "name": "Bannière 1920 de large",
+      "max_width": 1920
+    },
+    {
+      "id": "hero-1080",
+      "kind": "video",
+      "name": "Hero 1920×1080",
+      "max_width": 1920,
+      "max_height": 1080,
+      "crf": 24,
+      "audio_kbps": 128
+    },
+    {
+      "id": "podcast-96",
+      "kind": "audio",
+      "name": "Podcast 96k",
+      "kbps": 96
+    }
+  ]
+}
