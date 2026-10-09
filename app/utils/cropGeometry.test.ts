@@ -175,6 +175,13 @@ describe('fitInsideBox', () => {
     expect(fitInsideBox(input, 2000, 2000)).toEqual(expected)
   })
 
+  it('rounds the same odd height in opposite directions per branch (measured, ffmpeg 7.1.1)', () => {
+    // Two-axis with no binding cap trims down to even...
+    expect(fitInsideBox({ width: 1000, height: 667 }, 2000, 2000)).toEqual({ width: 1000, height: 666 })
+    // ...while the single-axis `-2` form rounds the derived axis to nearest.
+    expect(fitInsideBox({ width: 1000, height: 667 }, 2000, 0)).toEqual({ width: 1000, height: 668 })
+  })
+
   it('width-only box bigger than the crop: unchanged (branch for maxH === 0)', () => {
     expect(fitInsideBox({ width: 1512, height: 1008 }, 1920, 0)).toEqual({ width: 1512, height: 1008 })
   })
