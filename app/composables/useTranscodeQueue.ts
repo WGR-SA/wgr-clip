@@ -326,20 +326,17 @@ export function useTranscodeQueue() {
   }
 
   async function startStaged(items: StagedItem[]): Promise<string[]> {
-    const m = new Map(state.value.jobs)
     const uids = await startBatches(items, {
       startJobs: args => invoke<string[]>('start_jobs', { args }),
       resolveSelection,
       outputDir: () => state.value.outputDir,
       onJobs: (started) => {
+        const m = new Map(state.value.jobs)
         for (const j of started) m.set(j.id, makeJob(j.id, j.input, '', j.preset, j.kind, j.custom, j.crop))
+        state.value.jobs = m
       },
       toast: spec => useToast().add(spec)
     })
-    // One assignment after the whole batch run, not per-batch: start_jobs reads
-    // its collision set from the Rust side, so there's no correctness reason
-    // to re-render the job list after every batch.
-    state.value.jobs = m
     return uids
   }
 
