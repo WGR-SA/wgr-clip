@@ -1,15 +1,10 @@
 <script setup lang="ts">
 import type { StagedItem } from '~/types/job'
 import { basename } from '~/utils/format'
+import { KIND_ICON } from '~/utils/mediaKind'
 
 const props = defineProps<{ item: StagedItem }>()
 const emit = defineEmits<{ crop: [], remove: [] }>()
-
-const kindIcon: Record<StagedItem['kind'], string> = {
-  video: 'i-lucide-film',
-  image: 'i-lucide-image',
-  audio: 'i-lucide-music'
-}
 
 const cropText = computed(() => {
   const px = props.item.cropPx
@@ -20,7 +15,7 @@ const cropText = computed(() => {
 <template>
   <li class="row">
     <UIcon
-      :name="kindIcon[item.kind]"
+      :name="KIND_ICON[item.kind]"
       class="row__icon"
     />
     <span

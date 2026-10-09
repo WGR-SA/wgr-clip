@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const props = defineProps<{ id: string, title: string, hint: string, icon: string }>()
+const props = defineProps<{ id: string, title: string, hint: string, icon: string, compact?: boolean }>()
 const emit = defineEmits<{ drop: [paths: string[]], click: [] }>()
 
 const { hoveredId, register } = useDropTargets()
@@ -22,7 +22,7 @@ onBeforeUnmount(() => {
     ref="el"
     type="button"
     class="dropzone"
-    :class="{ 'dropzone--hover': isHover }"
+    :class="{ 'dropzone--hover': isHover, 'dropzone--compact': compact }"
     :aria-label="title"
     @click="emit('click')"
   >
@@ -34,7 +34,10 @@ onBeforeUnmount(() => {
       <h2 class="dropzone__title">
         {{ title }}
       </h2>
-      <p class="dropzone__hint">
+      <p
+        v-if="!compact"
+        class="dropzone__hint"
+      >
         {{ hint }}
       </p>
     </div>
@@ -104,5 +107,20 @@ onBeforeUnmount(() => {
   font-size: 0.8rem;
   color: #a8a8a8;
   margin: 0;
+}
+
+.dropzone--compact {
+  min-height: 74px;
+  padding: 0.75rem 1rem;
+}
+
+.dropzone--compact .dropzone__icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-bottom: 0;
+}
+
+.dropzone--compact .dropzone__title {
+  font-size: 0.95rem;
 }
 </style>

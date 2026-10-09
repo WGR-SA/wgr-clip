@@ -7,13 +7,10 @@ const props = defineProps<{ kind: MediaKind }>()
 const queue = useTranscodeQueue()
 const userPresets = useUserPresets()
 
-const MANAGE = 'manage'
-
 interface PresetOption {
-  value: PresetSelection | typeof MANAGE
+  value: PresetSelection
   label: string
   hint: string
-  icon?: string
 }
 
 const itemsByKind: Record<MediaKind, PresetOption[]> = {
@@ -37,14 +34,7 @@ const itemsByKind: Record<MediaKind, PresetOption[]> = {
   ]
 }
 
-const manageOption: PresetOption = {
-  value: MANAGE,
-  label: 'Gérer les presets…',
-  hint: 'Importer un fichier JSON, supprimer',
-  icon: 'i-lucide-settings-2'
-}
-
-// Groups render with a separator between them: built-ins, imported, manage.
+// Groups render with a separator between them: built-ins, then imported.
 const items = computed<PresetOption[][]>(() => {
   const imported = userPresets.forKind(props.kind).map<PresetOption>(p => ({
     value: userSelection(p.id),
@@ -53,7 +43,6 @@ const items = computed<PresetOption[][]>(() => {
   }))
   const groups = [itemsByKind[props.kind]]
   if (imported.length > 0) groups.push(imported)
-  groups.push([manageOption])
   return groups
 })
 
@@ -71,10 +60,7 @@ const currentValue = computed<PresetSelection>(() => {
 
 const selected = computed<PresetOption>({
   get: () => items.value.flat().find(i => i.value === currentValue.value) ?? itemsByKind[props.kind][0]!,
-  set: (v) => {
-    if (v.value === MANAGE) userPresets.openManager()
-    else queue.setPreset(props.kind, v.value)
-  }
+  set: v => queue.setPreset(props.kind, v.value)
 })
 
 const meta = computed(() => kindMeta[props.kind])
@@ -101,11 +87,6 @@ const meta = computed(() => kindMeta[props.kind])
     <template #item="{ item }">
       <span class="preset__option">
         <strong class="preset__option-label">
-          <UIcon
-            v-if="item.icon"
-            :name="item.icon"
-            class="preset__option-icon"
-          />
           {{ item.label }}
         </strong>
         <span class="preset__hint">{{ item.hint }}</span>
@@ -171,12 +152,6 @@ const meta = computed(() => kindMeta[props.kind])
   gap: 0.35rem;
 }
 
-.preset__option-icon {
-  width: 0.85rem;
-  height: 0.85rem;
-  color: var(--color-icterine-400);
-}
-
 .preset__hint {
   display: block;
   font-size: 0.72rem;
@@ -188,7 +163,7 @@ const meta = computed(() => kindMeta[props.kind])
    for our compact pill triggers. Force a sensible reading width. */
 :global(.preset__popover) {
   min-width: 280px !important;
-  /* Default max-h-60 hides the 5th entry (Gérer les presets…) behind a scroll. */
+  /* Default max-h-60 clips the imported-presets group behind a scroll. */
   max-height: min(70vh, 34rem) !important;
 }
 </style>

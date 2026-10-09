@@ -3,7 +3,6 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { loadSettings, saveSettings } from '~/composables/useSettingsStore'
-import { icloudToast, splitIcloudStubs } from '~/utils/icloud'
 import { useUserPresets } from '~/composables/useUserPresets'
 import { detectKind } from '~/utils/mediaKind'
 import { startBatches, type ResolvedPreset } from '~/utils/jobStart'
@@ -32,10 +31,6 @@ export const DEFAULT_CUSTOM: CustomParams = {
   image_max_height: 2000,
   image_quality: 85,
   audio_kbps: 192
-}
-
-export function toastIcloudStubs(stubs: string[]) {
-  useToast().add(icloudToast(stubs))
 }
 
 interface QueueState {
@@ -222,109 +217,6 @@ export function useTranscodeQueue() {
     }
   }
 
-  async function addInputs(rawPaths: string[]) {
-    console.log('[queue] addInputs called with', rawPaths.length, 'paths', rawPaths)
-    if (rawPaths.length === 0) return
-
-    const split = splitIcloudStubs(rawPaths)
-    if (split.stubs.length > 0) toastIcloudStubs(split.stubs)
-    rawPaths = split.paths
-    if (rawPaths.length === 0) return
-
-    let expanded: string[]
-    try {
-      expanded = await invoke<string[]>('expand_paths', { paths: rawPaths })
-    } catch (err) {
-      console.error('[queue] expand_paths failed', err)
-      useToast().add({
-        title: 'Erreur de lecture du drop',
-        description: String(err),
-        color: 'error'
-      })
-      return
-    }
-    console.log('[queue] expand_paths returned', expanded.length, 'media files', expanded)
-    if (expanded.length === 0) {
-      const names = rawPaths.map(p => p.split(/[/\\]/).pop() ?? p).join(', ')
-      useToast().add({
-        title: 'Aucun fichier supporté',
-        description: `Formats acceptés : vidéo, image ou audio courants. Reçu : ${names}`,
-        color: 'warning'
-      })
-      return
-    }
-
-    // Group by detected kind so each batch gets the kind-specific preset.
-    const groups = new Map<MediaKind, string[]>()
-    for (const path of expanded) {
-      const kind = detectKind(path)
-      const arr = groups.get(kind) ?? []
-      arr.push(path)
-      groups.set(kind, arr)
-    }
-
-    const m = new Map(state.value.jobs)
-    for (const [kind, inputs] of groups) {
-      const { preset, custom: customForJob, slug } = resolveSelection(kind)
-      let ids: string[]
-      try {
-        ids = await invoke<string[]>('start_jobs', {
-          args: {
-            inputs,
-            preset,
-            custom: customForJob,
-            slug,
-            output_dir: state.value.outputDir
-          }
-        })
-      } catch (err) {
-        console.error('[queue] start_jobs failed', err)
-        useToast().add({
-          title: `Échec du démarrage (${kind})`,
-          description: String(err),
-          color: 'error'
-        })
-        continue
-      }
-      inputs.forEach((input, i) => {
-        const id = ids[i]
-        if (!id) return
-        m.set(id, makeJob(id, input, '', preset, kind, customForJob))
-      })
-    }
-    state.value.jobs = m
-  }
-
-  async function addCroppedInput(input: string, crop: CropRect) {
-    const { preset, custom: customForJob, slug } = resolveSelection('image')
-    let ids: string[]
-    try {
-      ids = await invoke<string[]>('start_jobs', {
-        args: {
-          inputs: [input],
-          preset,
-          custom: customForJob,
-          slug,
-          output_dir: state.value.outputDir,
-          crop
-        }
-      })
-    } catch (err) {
-      console.error('[queue] start_jobs (crop) failed', err)
-      useToast().add({
-        title: 'Échec du démarrage (image)',
-        description: String(err),
-        color: 'error'
-      })
-      return
-    }
-    const id = ids[0]
-    if (!id) return
-    const m = new Map(state.value.jobs)
-    m.set(id, makeJob(id, input, '', preset, 'image', customForJob, crop))
-    state.value.jobs = m
-  }
-
   async function startStaged(items: StagedItem[]): Promise<string[]> {
     const uids = await startBatches(items, {
       startJobs: args => invoke<string[]>('start_jobs', { args }),
@@ -362,20 +254,6 @@ export function useTranscodeQueue() {
     if (typeof result === 'string') {
       state.value.outputDir = result
       void saveSettings({ outputDir: result })
-    }
-  }
-
-  async function pickInputFiles() {
-    const result = await open({
-      multiple: true,
-      filters: [
-        { name: 'Médias', extensions: ['mp4', 'mov', 'mkv', 'avi', 'webm', 'm4v', 'flv', 'wmv', 'mts', 'm2ts', 'ts', '3gp', 'jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'heif', 'tif', 'tiff', 'bmp', 'gif', 'mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'oga', 'opus', 'wma', 'aiff', 'aif'] }
-      ]
-    })
-    if (Array.isArray(result) && result.length > 0) {
-      await addInputs(result)
-    } else if (typeof result === 'string') {
-      await addInputs([result])
     }
   }
 
@@ -422,14 +300,11 @@ export function useTranscodeQueue() {
     outputDir: computed(() => state.value.outputDir),
     appInfo: computed(() => state.value.appInfo),
     bindListeners,
-    addInputs,
-    addCroppedInput,
     startStaged,
     cancel,
     cancelAll,
     retry,
     pickOutputDir,
-    pickInputFiles,
     setPreset,
     patchCustom,
     copyDiagnostics,

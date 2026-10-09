@@ -6,13 +6,11 @@ import { mergeUserPresets, parseUserPresetFile, type UserPreset } from '~/utils/
 
 interface UserPresetsState {
   presets: UserPreset[]
-  managerOpen: boolean
 }
 
 export function useUserPresets() {
   const state = useState<UserPresetsState>('wgr-clip-user-presets', () => ({
-    presets: [],
-    managerOpen: false
+    presets: []
   }))
 
   function hydrate(presets: UserPreset[]) {
@@ -74,19 +72,10 @@ export function useUserPresets() {
 
   return {
     presets: computed(() => state.value.presets),
-    managerOpen: computed({
-      get: () => state.value.managerOpen,
-      set: (v: boolean) => {
-        state.value.managerOpen = v
-      }
-    }),
     hydrate,
     forKind,
     byId,
     importFromFile,
-    remove,
-    openManager: () => {
-      state.value.managerOpen = true
-    }
+    remove
   }
 }

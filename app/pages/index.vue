@@ -1,22 +1,19 @@
 <script setup lang="ts">
-import { CONVERT_ZONE_ID, CROP_ZONE_ID } from '~/composables/useDropTargets'
+import { CONVERT_ZONE_ID } from '~/composables/useDropTargets'
 
 useHead({ title: 'wgr-clip' })
 
-const queue = useTranscodeQueue()
+const staging = useStaging()
 const crop = useCropSession()
+const settingsOpen = ref(false)
 
 function reportError(e: unknown) {
   console.error('[index] drop failed', e)
   useToast().add({ title: 'Erreur', description: String(e), color: 'error' })
 }
 
-function onConvertDrop(paths: string[]) {
-  queue.addInputs(paths).catch(reportError)
-}
-
-function onCropDrop(paths: string[]) {
-  crop.open(paths).catch(reportError)
+function onDrop(paths: string[]) {
+  staging.add(paths).catch(reportError)
 }
 </script>
 
@@ -24,45 +21,36 @@ function onCropDrop(paths: string[]) {
   <div class="page">
     <UpdateBanner />
 
-    <!-- Title + settings pills share the top row. clip on the left, controls
-         flowing right; settings wrap to a second line on narrow windows. -->
     <section class="page__topbar">
       <h1 class="page__title">
         clip
       </h1>
-      <PresetSelector kind="video" />
-      <PresetSelector kind="image" />
-      <PresetSelector kind="audio" />
-      <DestinationPicker />
+      <UButton
+        icon="i-lucide-settings-2"
+        color="neutral"
+        variant="ghost"
+        aria-label="Réglages"
+        @click="settingsOpen = true"
+      />
     </section>
 
-    <CustomParamsPanel />
-    <PresetManagerModal />
-
     <CropEditor v-if="crop.active.value" />
-    <div
+    <DropZone
       v-else
-      class="page__zones"
-    >
-      <DropZone
-        :id="CONVERT_ZONE_ID"
-        title="Déposez ou cliquez pour parcourir"
-        hint="Vidéos, images, audio. Compression web en un drag."
-        icon="i-lucide-arrow-down-to-line"
-        @drop="onConvertDrop"
-        @click="queue.pickInputFiles()"
-      />
-      <DropZone
-        :id="CROP_ZONE_ID"
-        title="Recadrer"
-        hint="Déposez une image, choisissez le cadre."
-        icon="i-lucide-crop"
-        @drop="onCropDrop"
-        @click="crop.pickImages()"
-      />
-    </div>
+      :id="CONVERT_ZONE_ID"
+      title="Déposez ou cliquez pour parcourir"
+      hint="Vidéos, images, audio. Compression web en un drag."
+      icon="i-lucide-arrow-down-to-line"
+      :compact="staging.count.value > 0"
+      @drop="onDrop"
+      @click="staging.pickFiles()"
+    />
 
+    <StagingPanel />
+    <CustomParamsPanel />
     <JobList />
+
+    <SettingsPanel v-model:open="settingsOpen" />
   </div>
 </template>
 
@@ -88,12 +76,6 @@ function onCropDrop(paths: string[]) {
   letter-spacing: -0.02em;
   line-height: 1;
   color: #FDF7F1;
-  margin: 0 auto 0 0; /* push following pills to the right edge */
-}
-
-.page__zones {
-  display: flex;
-  gap: 0.6rem;
-  flex-wrap: wrap;
+  margin: 0 auto 0 0; /* push the settings button to the right edge */
 }
 </style>

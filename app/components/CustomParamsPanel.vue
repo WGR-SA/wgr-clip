@@ -2,10 +2,11 @@
 import type { CustomParams } from '~/types/job'
 
 const queue = useTranscodeQueue()
+const staging = useStaging()
 
-const showVideo = computed(() => queue.videoPreset.value === 'custom')
-const showImage = computed(() => queue.imagePreset.value === 'custom')
-const showAudio = computed(() => queue.audioPreset.value === 'custom')
+const showVideo = computed(() => staging.kinds.value.has('video') && queue.videoPreset.value === 'custom')
+const showImage = computed(() => staging.kinds.value.has('image') && queue.imagePreset.value === 'custom')
+const showAudio = computed(() => staging.kinds.value.has('audio') && queue.audioPreset.value === 'custom')
 const visible = computed(() => showVideo.value || showImage.value || showAudio.value)
 
 function field(key: keyof CustomParams, min: number, max: number) {

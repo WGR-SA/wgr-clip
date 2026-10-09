@@ -6,6 +6,12 @@ const AUDIO_EXTS = ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'oga', 'opus', 'w
 
 export const ALL_MEDIA_EXTS = [...VIDEO_EXTS, ...IMAGE_EXTS, ...AUDIO_EXTS]
 
+export const KIND_ICON: Record<MediaKind, string> = {
+  video: 'i-lucide-film',
+  image: 'i-lucide-image',
+  audio: 'i-lucide-music'
+}
+
 export function detectKind(path: string): MediaKind {
   const m = path.toLowerCase().match(/\.([^./\\]+)$/)
   const ext = (m && m[1]) ? m[1] : ''
