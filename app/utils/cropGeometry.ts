@@ -149,9 +149,24 @@ function roundEven(x: number): number {
   return Math.max(2, Math.round(x / 2) * 2)
 }
 
+function floorEven(x: number): number {
+  return Math.max(2, Math.floor(x / 2) * 2)
+}
+
 // Mirrors preset.rs::fit_filter's four branches (the downscale-only fit a
-// preset applies after the crop). force_divisible_by=2 rounds to the
-// NEAREST even number, not a floor — verified against real ffmpeg output.
+// preset applies after the crop).
+//
+// The rounding rule was established by measuring the bundled ffmpeg sidecar,
+// not read off ffmpeg's source: in the two-axis branch, when neither cap
+// binds (factor === 1, nothing is actually rescaled) force_divisible_by=2
+// just trims both axes down to even, but once a cap binds it rescales first
+// and rounds the result to the NEAREST even number. The single-axis
+// branches' `-2` always rounds to nearest, never floors.
+// This is version-specific — `fetch:ffmpeg` pulls whatever build is current,
+// so the derived (non-capped) axis could drift by up to 2px on another
+// ffmpeg version. The headline axis — the one the cap binds — is always
+// exact regardless, because it is a plain `min()`; that is why the readout
+// is still worth showing even under that drift.
 export function fitInsideBox(size: MediaSize, maxW: number, maxH: number): MediaSize {
   if (maxW === 0 && maxH === 0) return size
   if (maxH === 0) {
@@ -163,5 +178,6 @@ export function fitInsideBox(size: MediaSize, maxW: number, maxH: number): Media
     return { width: roundEven(height * (size.width / size.height)), height }
   }
   const factor = Math.min(1, maxW / size.width, maxH / size.height)
-  return { width: roundEven(size.width * factor), height: roundEven(size.height * factor) }
+  const round = factor === 1 ? floorEven : roundEven
+  return { width: round(size.width * factor), height: round(size.height * factor) }
 }

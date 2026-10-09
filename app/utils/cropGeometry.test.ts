@@ -161,6 +161,20 @@ describe('fitInsideBox', () => {
     expect(fitInsideBox({ width: 1512, height: 1008 }, 4000, 4000)).toEqual({ width: 1512, height: 1008 })
   })
 
+  // When neither cap binds (factor === 1, nothing actually rescales),
+  // force_divisible_by=2 FLOORS both axes to even rather than rounding —
+  // a distinct rule from the binding case below it. Measured against the
+  // bundled ffmpeg 7.1.1 via the sidecar; round 1 of this feature missed
+  // this split because its fixtures all had a binding cap.
+  it.each([
+    [{ width: 1000, height: 667 }, { width: 1000, height: 666 }],
+    [{ width: 1001, height: 667 }, { width: 1000, height: 666 }],
+    [{ width: 999, height: 667 }, { width: 998, height: 666 }],
+    [{ width: 1000, height: 666 }, { width: 1000, height: 666 }] // already even: floor and round agree
+  ])('floors %o into a non-binding 2000×2000 box as %o', (input, expected) => {
+    expect(fitInsideBox(input, 2000, 2000)).toEqual(expected)
+  })
+
   it('width-only box bigger than the crop: unchanged (branch for maxH === 0)', () => {
     expect(fitInsideBox({ width: 1512, height: 1008 }, 1920, 0)).toEqual({ width: 1512, height: 1008 })
   })
@@ -173,8 +187,10 @@ describe('fitInsideBox', () => {
     expect(fitInsideBox({ width: 1512, height: 1008 }, 800, 800)).toEqual({ width: 800, height: 534 })
   })
 
-  // force_divisible_by=2 rounds to the NEAREST multiple of two, not a floor —
-  // each row scaled into an 800×800 box, verified against ffmpeg's actual output.
+  // Once a cap binds on at least one axis, force_divisible_by=2 rounds to
+  // the NEAREST multiple of two instead of flooring (contrast the
+  // non-binding fixtures above) — verified against ffmpeg 7.1.1's actual
+  // output via the sidecar.
   it.each([
     [{ width: 1000, height: 667 }, { width: 800, height: 534 }],
     [{ width: 1000, height: 669 }, { width: 800, height: 536 }],
