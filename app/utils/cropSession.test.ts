@@ -1,7 +1,8 @@
 import { ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
-import type { CropRect, MediaKind, MediaSize } from '~/types/job'
-import { createCropSession, initialCropState, type CropSessionDeps, type ToastSpec } from './cropSession'
+import type { CropRect, MediaKind, MediaSize, ToastSpec } from '~/types/job'
+import { cropPixelSize } from './cropGeometry'
+import { createCropSession, initialCropState, type CropSessionDeps } from './cropSession'
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0))
 
@@ -28,7 +29,7 @@ function harness(overrides: Partial<CropSessionDeps> = {}) {
   const urls: string[] = []
   const revoked: string[] = []
   const previews = new Map<string, Deferred<ArrayBuffer>>()
-  const enqueued: { input: string, rect: CropRect }[] = []
+  const cropped: { input: string, rect: CropRect, cropPx: MediaSize }[] = []
   let probed: MediaSize = { width: 400, height: 300 }
   let previewSize: MediaSize = { width: 400, height: 300 }
   const deps: CropSessionDeps = {
@@ -48,8 +49,7 @@ function harness(overrides: Partial<CropSessionDeps> = {}) {
     revokeUrl: u => void revoked.push(u),
     previewSize: async () => previewSize,
     toast: t => void toasts.push(t),
-    addCroppedInput: vi.fn(async (input: string, rect: CropRect) => void enqueued.push({ input, rect })),
-    pickImages: async () => [],
+    setCrop: vi.fn((input: string, rect: CropRect, cropPx: MediaSize) => void cropped.push({ input, rect, cropPx })),
     ...overrides
   }
   const state = ref(initialCropState())
@@ -69,7 +69,7 @@ function harness(overrides: Partial<CropSessionDeps> = {}) {
     toasts,
     urls,
     revoked,
-    enqueued,
+    cropped,
     previews,
     resolvePreview,
     failPreview,
@@ -151,17 +151,15 @@ describe('createCropSession cancellation and re-entrancy', () => {
     expect(h.session.current.value?.input).toBe('/d/a.jpg')
   })
 
-  it('confirm enqueues once when called twice before the first returns', async () => {
-    const gate = deferred<undefined>()
-    const h = harness({ addCroppedInput: vi.fn(() => gate.promise) })
+  it('confirm writes the crop once when called twice back to back', async () => {
+    const h = harness()
     void h.session.open(['/d/a.jpg'])
     await flush()
     await h.resolvePreview('/d/a.jpg')
     const first = h.session.confirm()
     const second = h.session.confirm()
-    gate.resolve(undefined)
     await Promise.all([first, second])
-    expect(h.deps.addCroppedInput).toHaveBeenCalledTimes(1)
+    expect(h.deps.setCrop).toHaveBeenCalledTimes(1)
     expect(h.session.active.value).toBe(false)
   })
 })
@@ -199,8 +197,20 @@ describe('createCropSession source size and ratio', () => {
     const c = h.session.current.value!
     expect((c.rect.w * c.sourceW) / (c.rect.h * c.sourceH)).toBeCloseTo(16 / 9, 6)
     await h.session.confirm()
-    expect(h.enqueued).toEqual([{ input: '/d/a.jpg', rect: c.rect }])
+    expect(h.cropped).toEqual([{ input: '/d/a.jpg', rect: c.rect, cropPx: cropPixelSize(c.rect, c.sourceW, c.sourceH) }])
     expect(h.session.active.value).toBe(false)
     expect(h.revoked).toEqual(h.urls)
+  })
+
+  it('confirm reports the cropped pixel size from the oriented source', async () => {
+    const h = harness()
+    h.setProbed({ width: 4032, height: 3024 })
+    h.setPreviewSize({ width: 900, height: 1200 })
+    void h.session.open(['/d/portrait.heic'])
+    await flush()
+    await h.resolvePreview('/d/portrait.heic')
+    h.session.setRect({ x: 0, y: 0, w: 0.5, h: 0.25 })
+    await h.session.confirm()
+    expect(h.cropped[0]?.cropPx).toEqual({ width: 1512, height: 1008 })
   })
 })

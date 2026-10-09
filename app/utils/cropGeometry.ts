@@ -137,3 +137,58 @@ export function orientSourceSize(probed: MediaSize, preview: MediaSize): MediaSi
   const short = Math.min(probed.width, probed.height)
   return preview.width >= preview.height ? { width: long, height: short } : { width: short, height: long }
 }
+
+export function cropPixelSize(rect: CropRect, sourceW: number, sourceH: number): MediaSize {
+  return {
+    width: Math.max(1, Math.round(rect.w * sourceW)),
+    height: Math.max(1, Math.round(rect.h * sourceH))
+  }
+}
+
+function roundEven(x: number): number {
+  return Math.max(2, Math.round(x / 2) * 2)
+}
+
+// ffmpeg rounds to the nearest even but never past the axis's own target, so
+// an overshoot steps down a notch instead.
+function capEven(x: number, target: number): number {
+  const n = Math.round(x / 2) * 2
+  return Math.max(2, n > target ? n - 2 : n)
+}
+
+// Mirrors preset.rs::fit_filter's four branches (the downscale-only fit a
+// preset applies after the crop).
+//
+// Two-axis rule: nearest-even, capped at the axis's own target, where the
+// target is what ffmpeg's `min(iw,W)` / `min(ih,H)` evaluate to before the
+// aspect fit runs (i.e. `min(source, cap)`) — rounding up past that target
+// would violate force_original_aspect_ratio=decrease's "never exceed what
+// was asked for" guarantee, so ffmpeg steps back down to the next even
+// number instead. This was established by measuring the bundled ffmpeg
+// sidecar across 25 cases, not read off ffmpeg's source, after two simpler
+// theories (plain nearest-even, then a floor/round split keyed on whether a
+// cap bound) each failed on a constructed case — a 667 can round to either
+// 666 or 668 depending on its target, so neither "look at the value alone"
+// nor "look at whether scaling happened" explains it on its own. It is
+// version-specific: `fetch:ffmpeg` pulls whatever build is current, so this
+// could drift on another one. The single-axis branches below force no
+// evenness at all on their explicit axis (`min(iw,W)` is passed straight
+// through, odd or not) — only the derived axis rounds, via `roundEven`.
+export function fitInsideBox(size: MediaSize, maxW: number, maxH: number): MediaSize {
+  if (maxW === 0 && maxH === 0) return size
+  if (maxH === 0) {
+    const width = Math.min(size.width, maxW)
+    return { width, height: roundEven(width * (size.height / size.width)) }
+  }
+  if (maxW === 0) {
+    const height = Math.min(size.height, maxH)
+    return { width: roundEven(height * (size.width / size.height)), height }
+  }
+  const targetW = Math.min(size.width, maxW)
+  const targetH = Math.min(size.height, maxH)
+  const factor = Math.min(targetW / size.width, targetH / size.height)
+  return {
+    width: capEven(size.width * factor, targetW),
+    height: capEven(size.height * factor, targetH)
+  }
+}

@@ -1,15 +1,8 @@
 import { computed, type Ref } from 'vue'
-import type { CropRect, MediaKind, MediaSize } from '~/types/job'
-import { applyRatio, initialRect, orientSourceSize } from '~/utils/cropGeometry'
+import type { CropRect, MediaKind, MediaSize, ToastSpec } from '~/types/job'
+import { applyRatio, cropPixelSize, initialRect, orientSourceSize } from '~/utils/cropGeometry'
 import { icloudToast, splitIcloudStubs } from '~/utils/icloud'
 import { basename } from '~/utils/format'
-
-export interface ToastSpec {
-  title: string
-  description?: string
-  color?: 'warning' | 'error'
-  duration?: number
-}
 
 export interface CropCurrent {
   input: string
@@ -44,8 +37,7 @@ export interface CropSessionDeps {
   revokeUrl: (url: string) => void
   previewSize: (url: string) => Promise<MediaSize>
   toast: (spec: ToastSpec) => void
-  addCroppedInput: (input: string, rect: CropRect) => Promise<void>
-  pickImages: () => Promise<string[]>
+  setCrop: (input: string, rect: CropRect, cropPx: MediaSize) => void
 }
 
 export function createCropSession(state: Ref<CropState>, deps: CropSessionDeps) {
@@ -68,7 +60,7 @@ export function createCropSession(state: Ref<CropState>, deps: CropSessionDeps) 
     if (rejected.length > 0) {
       deps.toast({
         title: 'Images seulement',
-        description: `Le recadrage ne prend que des images. Ignoré : ${rejected.map(basename).join(', ')}`,
+        description: `Reste dans la liste, mais ne sera pas recadré : ${rejected.map(basename).join(', ')}`,
         color: 'warning'
       })
     }
@@ -77,11 +69,6 @@ export function createCropSession(state: Ref<CropState>, deps: CropSessionDeps) 
     state.value.pending = [...state.value.pending, ...images]
     state.value.total += images.length
     if (!state.value.current && !state.value.loading) await loadNext()
-  }
-
-  async function pickImages() {
-    const paths = await deps.pickImages()
-    if (paths.length > 0) await open(paths)
   }
 
   async function loadNext() {
@@ -166,7 +153,7 @@ export function createCropSession(state: Ref<CropState>, deps: CropSessionDeps) 
     // `loading` keeps the editor mounted on its spinner meanwhile.
     state.value.current = null
     state.value.loading = true
-    await deps.addCroppedInput(c.input, c.rect)
+    deps.setCrop(c.input, c.rect, cropPixelSize(c.rect, c.sourceW, c.sourceH))
     deps.revokeUrl(c.previewUrl)
     await loadNext()
   }
@@ -190,7 +177,6 @@ export function createCropSession(state: Ref<CropState>, deps: CropSessionDeps) 
     index: computed(() => state.value.index),
     total: computed(() => state.value.total),
     open,
-    pickImages,
     setRect,
     setRatio,
     confirm,

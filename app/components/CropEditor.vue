@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { CROP_ZONE_ID } from '~/composables/useDropTargets'
-import { RATIO_PRESETS, moveRect, resizeRect, type Handle } from '~/utils/cropGeometry'
+import { RATIO_PRESETS, cropPixelSize, fitInsideBox, moveRect, resizeRect, type Handle } from '~/utils/cropGeometry'
 import { editorKeyAction } from '~/utils/editorKeys'
 import { basename } from '~/utils/format'
 
 const crop = useCropSession()
+const staging = useStaging()
+const queue = useTranscodeQueue()
 const { register } = useDropTargets()
 
 const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
@@ -25,10 +27,26 @@ const frameStyle = computed(() => {
   }
 })
 
-const sizeText = computed(() => {
+const cropPx = computed(() => {
   const c = current.value
-  if (!c) return ''
-  return `${Math.round(c.rect.w * c.sourceW)} × ${Math.round(c.rect.h * c.sourceH)} px`
+  return c ? cropPixelSize(c.rect, c.sourceW, c.sourceH) : null
+})
+
+const sourceSizeText = computed(() => {
+  const px = cropPx.value
+  return px ? `${px.width} × ${px.height} px` : ''
+})
+
+// Hidden when the box is Original (0, 0) or the fit changes nothing — an
+// arrow pointing at an identical number would just be noise.
+const resultSizeText = computed(() => {
+  const px = cropPx.value
+  if (!px) return null
+  const { maxW, maxH } = queue.imageBox.value
+  if (maxW === 0 && maxH === 0) return null
+  const fitted = fitInsideBox(px, maxW, maxH)
+  if (fitted.width === px.width && fitted.height === px.height) return null
+  return `${fitted.width} × ${fitted.height} px`
 })
 
 const counterText = computed(() => `${crop.index.value}/${crop.total.value}`)
@@ -70,12 +88,22 @@ function onKey(e: KeyboardEvent) {
   else crop.close()
 }
 
+function reportError(e: unknown) {
+  console.error('[crop] drop failed', e)
+  useToast().add({ title: 'Erreur', description: String(e), color: 'error' })
+}
+
 let unregister: (() => void) | null = null
 
 onMounted(() => {
   window.addEventListener('keydown', onKey)
-  // Images dropped on the editor join the current session.
-  unregister = register({ id: CROP_ZONE_ID, el: root, onDrop: paths => void crop.open(paths) })
+  // setCrop only writes onto a staged item, so a drop here must stage before
+  // it can be cropped — otherwise the file is silently dropped on confirm.
+  unregister = register({
+    id: CROP_ZONE_ID,
+    el: root,
+    onDrop: paths => void staging.add(paths).then(staged => crop.open(staged)).catch(reportError)
+  })
 })
 
 onBeforeUnmount(() => {
@@ -160,7 +188,12 @@ onBeforeUnmount(() => {
           {{ r.label }}
         </UButton>
       </div>
-      <span class="crop__size">{{ sizeText }}</span>
+      <span class="crop__size">
+        {{ sourceSizeText }}<span
+          v-if="resultSizeText"
+          class="crop__size-result"
+        > → {{ resultSizeText }}</span>
+      </span>
     </div>
 
     <footer class="crop__actions">
@@ -185,7 +218,7 @@ onBeforeUnmount(() => {
         :disabled="!current"
         @click="crop.confirm()"
       >
-        Recadrer et convertir
+        Valider le recadrage
       </UButton>
     </footer>
   </section>
@@ -314,6 +347,11 @@ onBeforeUnmount(() => {
   font-size: 0.78rem;
   color: #a8a8a8;
   font-variant-numeric: tabular-nums;
+}
+
+.crop__size-result {
+  color: var(--color-icterine-400);
+  font-weight: 600;
 }
 
 .crop__actions {

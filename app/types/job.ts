@@ -100,3 +100,20 @@ export interface AppInfo {
   hw_accel: string
   ffmpeg_version: string
 }
+
+/** A file waiting to be converted. No backend id — those come from start_jobs. */
+export interface StagedItem {
+  uid: string
+  input: string
+  kind: MediaKind
+  crop: CropRect | null
+  /** Crop size in source px, before the preset's fit-in-box resize; filled at confirm time so the row can show a badge. */
+  cropPx: MediaSize | null
+}
+
+export interface ToastSpec {
+  title: string
+  description?: string
+  color?: 'warning' | 'error'
+  duration?: number
+}

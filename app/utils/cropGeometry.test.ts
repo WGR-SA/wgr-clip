@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CropRect } from '~/types/job'
-import { MIN_SIZE, applyRatio, initialRect, moveRect, orientSourceSize, resizeRect } from './cropGeometry'
+import { MIN_SIZE, applyRatio, cropPixelSize, fitInsideBox, initialRect, moveRect, orientSourceSize, resizeRect } from './cropGeometry'
 
 function pxRatio(r: CropRect, aspect: number): number {
   return (r.w * aspect) / r.h
@@ -128,5 +128,122 @@ describe('orientSourceSize', () => {
 
   it('leaves a square source alone', () => {
     expect(orientSourceSize({ width: 2000, height: 2000 }, { width: 1200, height: 1200 })).toEqual({ width: 2000, height: 2000 })
+  })
+})
+
+describe('cropPixelSize', () => {
+  it('multiplies the fractional rect by the source size and rounds', () => {
+    expect(cropPixelSize({ x: 0, y: 0, w: 0.5, h: 0.25 }, 4000, 3000)).toEqual({ width: 2000, height: 750 })
+  })
+
+  it('rounds to the nearest pixel rather than truncating', () => {
+    expect(cropPixelSize({ x: 0, y: 0, w: 1 / 3, h: 1 / 3 }, 100, 100)).toEqual({ width: 33, height: 33 })
+    expect(cropPixelSize({ x: 0, y: 0, w: 0.666, h: 0.666 }, 100, 100)).toEqual({ width: 67, height: 67 })
+  })
+
+  it('never reports a zero dimension for a non-empty rect', () => {
+    const size = cropPixelSize({ x: 0, y: 0, w: 0.001, h: 0.001 }, 100, 100)
+    expect(size.width).toBeGreaterThanOrEqual(1)
+    expect(size.height).toBeGreaterThanOrEqual(1)
+  })
+})
+
+// Fixtures below are measured against the real ffmpeg sidecar (crop 1512×1008
+// out of a 4032×3024 source, then each box), not inferred from the formula —
+// see preset.rs::fit_filter for the filter they mirror.
+describe('fitInsideBox', () => {
+  it('no box (Original preset emits no scale filter): size passes through unchanged', () => {
+    expect(fitInsideBox({ width: 1512, height: 1008 }, 0, 0)).toEqual({ width: 1512, height: 1008 })
+  })
+
+  it('box bigger than the crop on both axes: never upscales', () => {
+    expect(fitInsideBox({ width: 1512, height: 1008 }, 2000, 2000)).toEqual({ width: 1512, height: 1008 })
+    expect(fitInsideBox({ width: 1512, height: 1008 }, 4000, 4000)).toEqual({ width: 1512, height: 1008 })
+  })
+
+  // With a box bigger than the source, each axis's own target equals the
+  // source itself (667, 1000, 999…): nearest-even would overshoot an odd
+  // one, so ffmpeg steps back down instead of rounding up. (Round 1 modelled
+  // this as "a cap never binds, so force_divisible_by=2 floors" — true for
+  // these rows, but wrong in general: see the odd-target box below, where
+  // the same 667 overshoots a tighter target and still steps down, with no
+  // "binding" involved at all.)
+  it.each([
+    [{ width: 1000, height: 667 }, { width: 1000, height: 666 }],
+    [{ width: 1001, height: 667 }, { width: 1000, height: 666 }],
+    [{ width: 999, height: 667 }, { width: 998, height: 666 }],
+    [{ width: 1000, height: 666 }, { width: 1000, height: 666 }] // already even: nothing to step down
+  ])('steps %o down to the even target inside a 2000×2000 box, as %o', (input, expected) => {
+    expect(fitInsideBox(input, 2000, 2000)).toEqual(expected)
+  })
+
+  it('the same 667 rounds opposite ways depending on how much room its own target has (measured, ffmpeg 7.1.1)', () => {
+    // Target height is 667 itself (box ≥ source on both axes) — nearest-even
+    // (668) would overshoot it, so it steps down to 666.
+    expect(fitInsideBox({ width: 1000, height: 667 }, 2000, 2000)).toEqual({ width: 1000, height: 666 })
+    // Target height is 1000 here (box is smaller, but height isn't the
+    // binding axis) — nearest-even (668) fits under 1000, so it stands.
+    expect(fitInsideBox({ width: 2000, height: 1334 }, 1000, 1000)).toEqual({ width: 1000, height: 668 })
+    // The single-axis `-2` form caps nothing on the derived axis at all (no
+    // height limit was given), so plain nearest-even applies: 668 again.
+    expect(fitInsideBox({ width: 1000, height: 667 }, 2000, 0)).toEqual({ width: 1000, height: 668 })
+  })
+
+  // Odd box dimensions are reachable: CustomParamsPanel's width/height
+  // inputs have no `step`, and userPresets.ts's `dimension()` schema has no
+  // evenness constraint either. Measured against ffmpeg 7.1.1 via the
+  // sidecar — these three rows are what disproved round 1's rule (it said
+  // every box here was even, so "floor when non-binding" looked sufficient
+  // until an odd *binding* target showed nearest-even overshooting it too).
+  it.each([
+    [{ width: 1000, height: 667 }, 801, 801, { width: 800, height: 534 }],
+    [{ width: 1000, height: 667 }, 803, 803, { width: 802, height: 536 }],
+    [{ width: 1000, height: 667 }, 999, 999, { width: 998, height: 666 }]
+  ])('steps %o down to the even target inside an odd %i×%i box, as %o', (input, maxW, maxH, expected) => {
+    expect(fitInsideBox(input, maxW, maxH)).toEqual(expected)
+  })
+
+  it('width-only box bigger than the crop: unchanged (branch for maxH === 0)', () => {
+    expect(fitInsideBox({ width: 1512, height: 1008 }, 1920, 0)).toEqual({ width: 1512, height: 1008 })
+  })
+
+  it('a crop already smaller than the box comes out unchanged', () => {
+    expect(fitInsideBox({ width: 604, height: 452 }, 800, 800)).toEqual({ width: 604, height: 452 })
+  })
+
+  it('fits inside a square box, both axes constrained', () => {
+    expect(fitInsideBox({ width: 1512, height: 1008 }, 800, 800)).toEqual({ width: 800, height: 534 })
+  })
+
+  // None of these rows overshoot their own target (each result sits well
+  // under 800), so the step-down never triggers and nearest-even applies
+  // plainly — contrast the odd-target fixtures above, where it does.
+  // Verified against ffmpeg 7.1.1's actual output via the sidecar.
+  it.each([
+    [{ width: 1000, height: 667 }, { width: 800, height: 534 }],
+    [{ width: 1000, height: 669 }, { width: 800, height: 536 }],
+    [{ width: 1000, height: 665 }, { width: 800, height: 532 }],
+    [{ width: 1500, height: 1000 }, { width: 800, height: 534 }],
+    [{ width: 1600, height: 900 }, { width: 800, height: 450 }],
+    [{ width: 1000, height: 1000 }, { width: 800, height: 800 }],
+    [{ width: 900, height: 1600 }, { width: 450, height: 800 }]
+  ])('rounds %o into an 800×800 box as %o', (input, expected) => {
+    expect(fitInsideBox(input, 800, 800)).toEqual(expected)
+  })
+
+  it('width-only branch (maxH === 0): downscales by width alone, mirrors the two-axis case where width is the binding constraint', () => {
+    expect(fitInsideBox({ width: 1000, height: 667 }, 800, 0)).toEqual({ width: 800, height: 534 })
+  })
+
+  it('height-only branch (maxW === 0): downscales by height alone, mirrors the two-axis case where height is the binding constraint', () => {
+    expect(fitInsideBox({ width: 900, height: 1600 }, 0, 800)).toEqual({ width: 450, height: 800 })
+  })
+
+  it('height-only branch never upscales either', () => {
+    expect(fitInsideBox({ width: 1512, height: 1008 }, 0, 2000)).toEqual({ width: 1512, height: 1008 })
+  })
+
+  it('clamps a vanishing dimension to a minimum of 2, the way cropPixelSize clamps to 1', () => {
+    expect(fitInsideBox({ width: 1000, height: 1 }, 1, 1000)).toEqual({ width: 2, height: 2 })
   })
 })
