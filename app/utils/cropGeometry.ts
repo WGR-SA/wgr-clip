@@ -137,3 +137,10 @@ export function orientSourceSize(probed: MediaSize, preview: MediaSize): MediaSi
   const short = Math.min(probed.width, probed.height)
   return preview.width >= preview.height ? { width: long, height: short } : { width: short, height: long }
 }
+
+export function cropPixelSize(rect: CropRect, sourceW: number, sourceH: number): MediaSize {
+  return {
+    width: Math.max(1, Math.round(rect.w * sourceW)),
+    height: Math.max(1, Math.round(rect.h * sourceH))
+  }
+}

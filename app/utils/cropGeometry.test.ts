@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CropRect } from '~/types/job'
-import { MIN_SIZE, applyRatio, initialRect, moveRect, orientSourceSize, resizeRect } from './cropGeometry'
+import { MIN_SIZE, applyRatio, cropPixelSize, initialRect, moveRect, orientSourceSize, resizeRect } from './cropGeometry'
 
 function pxRatio(r: CropRect, aspect: number): number {
   return (r.w * aspect) / r.h
@@ -128,5 +128,22 @@ describe('orientSourceSize', () => {
 
   it('leaves a square source alone', () => {
     expect(orientSourceSize({ width: 2000, height: 2000 }, { width: 1200, height: 1200 })).toEqual({ width: 2000, height: 2000 })
+  })
+})
+
+describe('cropPixelSize', () => {
+  it('multiplies the fractional rect by the source size and rounds', () => {
+    expect(cropPixelSize({ x: 0, y: 0, w: 0.5, h: 0.25 }, 4000, 3000)).toEqual({ width: 2000, height: 750 })
+  })
+
+  it('rounds to the nearest pixel rather than truncating', () => {
+    expect(cropPixelSize({ x: 0, y: 0, w: 1 / 3, h: 1 / 3 }, 100, 100)).toEqual({ width: 33, height: 33 })
+    expect(cropPixelSize({ x: 0, y: 0, w: 0.666, h: 0.666 }, 100, 100)).toEqual({ width: 67, height: 67 })
+  })
+
+  it('never reports a zero dimension for a non-empty rect', () => {
+    const size = cropPixelSize({ x: 0, y: 0, w: 0.001, h: 0.001 }, 100, 100)
+    expect(size.width).toBeGreaterThanOrEqual(1)
+    expect(size.height).toBeGreaterThanOrEqual(1)
   })
 })

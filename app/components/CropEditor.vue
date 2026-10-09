@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { CROP_ZONE_ID } from '~/composables/useDropTargets'
-import { RATIO_PRESETS, moveRect, resizeRect, type Handle } from '~/utils/cropGeometry'
+import { RATIO_PRESETS, cropPixelSize, moveRect, resizeRect, type Handle } from '~/utils/cropGeometry'
 import { editorKeyAction } from '~/utils/editorKeys'
 import { basename } from '~/utils/format'
 
@@ -28,7 +28,8 @@ const frameStyle = computed(() => {
 const sizeText = computed(() => {
   const c = current.value
   if (!c) return ''
-  return `${Math.round(c.rect.w * c.sourceW)} × ${Math.round(c.rect.h * c.sourceH)} px`
+  const px = cropPixelSize(c.rect, c.sourceW, c.sourceH)
+  return `${px.width} × ${px.height} px`
 })
 
 const counterText = computed(() => `${crop.index.value}/${crop.total.value}`)
