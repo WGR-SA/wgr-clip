@@ -1,15 +1,8 @@
 import { computed, type Ref } from 'vue'
-import type { CropRect, MediaKind, MediaSize } from '~/types/job'
+import type { CropRect, MediaKind, MediaSize, ToastSpec } from '~/types/job'
 import { applyRatio, initialRect, orientSourceSize } from '~/utils/cropGeometry'
 import { icloudToast, splitIcloudStubs } from '~/utils/icloud'
 import { basename } from '~/utils/format'
-
-export interface ToastSpec {
-  title: string
-  description?: string
-  color?: 'warning' | 'error'
-  duration?: number
-}
 
 export interface CropCurrent {
   input: string

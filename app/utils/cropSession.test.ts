@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import { describe, expect, it, vi } from 'vitest'
-import type { CropRect, MediaKind, MediaSize } from '~/types/job'
-import { createCropSession, initialCropState, type CropSessionDeps, type ToastSpec } from './cropSession'
+import type { CropRect, MediaKind, MediaSize, ToastSpec } from '~/types/job'
+import { createCropSession, initialCropState, type CropSessionDeps } from './cropSession'
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 0))
 

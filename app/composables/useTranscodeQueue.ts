@@ -5,6 +5,7 @@ import { writeText } from '@tauri-apps/plugin-clipboard-manager'
 import { loadSettings, saveSettings } from '~/composables/useSettingsStore'
 import { icloudToast, splitIcloudStubs } from '~/utils/icloud'
 import { useUserPresets } from '~/composables/useUserPresets'
+import { detectKind } from '~/utils/mediaKind'
 import type {
   AppInfo,
   CropRect,
@@ -29,19 +30,6 @@ export const DEFAULT_CUSTOM: CustomParams = {
   image_max_height: 2000,
   image_quality: 85,
   audio_kbps: 192
-}
-
-const VIDEO_EXTS = ['mp4', 'mov', 'mkv', 'avi', 'webm', 'm4v', 'flv', 'wmv', 'mts', 'm2ts', 'ts', '3gp']
-export const IMAGE_EXTS = ['jpg', 'jpeg', 'png', 'webp', 'avif', 'heic', 'heif', 'tif', 'tiff', 'bmp', 'gif']
-const AUDIO_EXTS = ['mp3', 'wav', 'flac', 'aac', 'm4a', 'ogg', 'oga', 'opus', 'wma', 'aiff', 'aif']
-
-export function detectKind(path: string): MediaKind {
-  const m = path.toLowerCase().match(/\.([^./\\]+)$/)
-  const ext = (m && m[1]) ? m[1] : ''
-  if (IMAGE_EXTS.includes(ext)) return 'image'
-  if (AUDIO_EXTS.includes(ext)) return 'audio'
-  if (VIDEO_EXTS.includes(ext)) return 'video'
-  return 'video'
 }
 
 export function toastIcloudStubs(stubs: string[]) {

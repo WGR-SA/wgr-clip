@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import type { MediaSize } from '~/types/job'
-import { IMAGE_EXTS, detectKind } from '~/composables/useTranscodeQueue'
+import { IMAGE_EXTS, detectKind } from '~/utils/mediaKind'
 import { createCropSession, initialCropState, type CropState } from '~/utils/cropSession'
 
 // Decoded dimensions of the preview: ffmpeg autorotates, ffprobe does not,
