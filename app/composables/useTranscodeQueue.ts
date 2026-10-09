@@ -312,8 +312,7 @@ export function useTranscodeQueue () {
   }
 
   async function addCroppedInput(input: string, crop: CropRect) {
-    const preset = state.value.imagePreset
-    const customForJob = preset === 'custom' ? { ...state.value.custom } : null
+    const { preset, custom: customForJob, slug } = resolveSelection('image')
     let ids: string[]
     try {
       ids = await invoke<string[]>('start_jobs', {
@@ -321,6 +320,7 @@ export function useTranscodeQueue () {
           inputs: [input],
           preset,
           custom: customForJob,
+          slug,
           output_dir: state.value.outputDir,
           crop
         }
