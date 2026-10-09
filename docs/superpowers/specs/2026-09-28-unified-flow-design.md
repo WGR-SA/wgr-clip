@@ -92,7 +92,7 @@ No preset field: the preset is resolved per kind at start time from the persiste
   - State: `{ items: StagedItem[] }`.
   - Deps: `expandPaths`, `detectKind`, `toast`, `newUid`.
   - API: `add(rawPaths)` (split iCloud stubs → `expand_paths` → dedupe by `input` → append), `remove(uid)`, `clear(uids?)`, `setCrop(input, rect, cropPx)`.
-  - Derived: `items`, `count`, `kinds` (Set of kinds present, drives which pills render), `imageInputs`.
+  - Derived: `items`, `count`, `kinds` (Set of kinds present, drives which pills render), `uncroppedImages` (the group-level button only offers images with no crop yet).
 - **`app/composables/useStaging.ts`** (new) — thin wrapper: `useState<StagingState>('wgr-clip-staging', …)` plus `invoke('expand_paths')`, `detectKind`, `useToast()`, `crypto.randomUUID`.
 - **`app/composables/useTranscodeQueue.ts`** — loses `addInputs` and `addCroppedInput` from the drop path, gains `startStaged(items): Promise<string[]>` returning the uids that started. Listeners, `counts`, `cancel`, `retry`, settings persistence and `pickInputFiles` (which now feeds staging) are untouched.
 - **`app/utils/cropSession.ts`** — the injected dep `addCroppedInput(input, rect)` becomes `setCrop(input, rect, cropPx)`, and `confirm` computes `cropPx` from the rect and the `sourceW`/`sourceH` it already holds. One line in the core, one in the wrapper. The pending queue, `skip`, and the `gen` staleness guard are unchanged.
