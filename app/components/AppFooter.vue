@@ -4,7 +4,7 @@ import { openUrl } from '@tauri-apps/plugin-opener'
 const queue = useTranscodeQueue()
 const version = computed(() => queue.appInfo.value?.version ?? '')
 
-async function openSite () {
+async function openSite() {
   try {
     await openUrl('https://wgr.ch')
   } catch (e) {

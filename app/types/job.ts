@@ -32,13 +32,13 @@ export interface MediaSize {
   height: number
 }
 
-export type JobStatusState =
-  | 'pending'
-  | 'probing'
-  | 'encoding'
-  | 'done'
-  | 'error'
-  | 'cancelled'
+export type JobStatusState
+  = | 'pending'
+    | 'probing'
+    | 'encoding'
+    | 'done'
+    | 'error'
+    | 'cancelled'
 
 export interface JobError {
   kind:

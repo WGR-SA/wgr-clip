@@ -48,8 +48,13 @@ const showEta = computed(() => isActive.value && props.job.kind !== 'image' && p
 const showSpeed = computed(() => isActive.value && props.job.kind !== 'image')
 const showFps = computed(() => isActive.value && props.job.kind === 'video' && props.job.fps > 0)
 
-async function cancel () { await queue.cancel(props.job.id) }
-async function revealOutput () { await queue.revealInFolder(props.job.output) }
+async function cancel() {
+  await queue.cancel(props.job.id)
+}
+
+async function revealOutput() {
+  await queue.revealInFolder(props.job.output)
+}
 </script>
 
 <template>

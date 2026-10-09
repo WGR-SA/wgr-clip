@@ -23,7 +23,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '..')
 
 const args = process.argv.slice(2)
-function flag (name, fallback) {
+function flag(name, fallback) {
   const i = args.indexOf(name)
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback
 }
@@ -41,7 +41,7 @@ const MARGIN = 100
 const INNER = SIZE - MARGIN * 2 // 824
 const RADIUS = Math.round(INNER * 0.2237) // ≈ 184
 
-async function registerMigra () {
+async function registerMigra() {
   const woff2 = readFileSync(join(ROOT, 'public/fonts/Migra-Extrabold.woff2'))
   const ttf = Buffer.from(await decompress(woff2))
   const tmpTtf = join(ROOT, 'src-tauri/icons/.migra.ttf')
@@ -50,14 +50,14 @@ async function registerMigra () {
   GlobalFonts.registerFromPath(tmpTtf, 'Migra')
 }
 
-async function loadLogoImage () {
+async function loadLogoImage() {
   const svg = readFileSync(join(ROOT, 'public/img/logo.svg'), 'utf8')
   const img = new Image()
   img.src = Buffer.from(svg, 'utf8')
   return img
 }
 
-function drawRoundedRect (ctx, x, y, w, h, r) {
+function drawRoundedRect(ctx, x, y, w, h, r) {
   ctx.beginPath()
   ctx.moveTo(x + r, y)
   ctx.lineTo(x + w - r, y)
@@ -71,7 +71,7 @@ function drawRoundedRect (ctx, x, y, w, h, r) {
   ctx.closePath()
 }
 
-function drawSquircleBackground (ctx) {
+function drawSquircleBackground(ctx) {
   ctx.fillStyle = BG
   drawRoundedRect(ctx, MARGIN, MARGIN, INNER, INNER, RADIUS)
   ctx.fill()
@@ -84,7 +84,7 @@ function drawSquircleBackground (ctx) {
  * and the "p" descender push the visual block downward, sitting lower in the
  * frame which reads more balanced than centering the full bounding box.
  */
-async function drawLockup (ctx) {
+async function drawLockup(ctx) {
   const logo = await loadLogoImage()
   const aspect = 120 / 287
   const wgrW = 150
@@ -120,7 +120,7 @@ async function drawLockup (ctx) {
   ctx.drawImage(logo, (SIZE - wgrW) / 2, wgrTop, wgrW, wgrH)
 }
 
-async function main () {
+async function main() {
   await registerMigra()
   const canvas = createCanvas(SIZE, SIZE)
   const ctx = canvas.getContext('2d')

@@ -64,7 +64,7 @@ const SOURCES = {
   }
 }
 
-function detectHostTriple () {
+function detectHostTriple() {
   try {
     const out = execFileSync('rustc', ['-vV'], { encoding: 'utf8' })
     const m = out.match(/^host:\s*(\S+)/m)
@@ -75,21 +75,21 @@ function detectHostTriple () {
   throw new Error('Unsupported platform — wgr-clip targets macOS and Windows only.')
 }
 
-async function download (url, dest) {
+async function download(url, dest) {
   console.log(`[fetch-ffmpeg]   GET ${url}`)
   const res = await fetch(url, { redirect: 'follow' })
   if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${url}`)
   await pipeline(Readable.fromWeb(res.body), createWriteStream(dest))
 }
 
-function extractZip (zipPath, destDir) {
+function extractZip(zipPath, destDir) {
   const r = process.platform === 'win32'
     ? spawnSync('powershell', ['-NoProfile', '-Command', `Expand-Archive -Path "${zipPath}" -DestinationPath "${destDir}" -Force`], { stdio: 'inherit' })
     : spawnSync('unzip', ['-o', '-q', zipPath, '-d', destDir], { stdio: 'inherit' })
   if (r.status !== 0) throw new Error(`Extraction failed (exit ${r.status})`)
 }
 
-function findBinary (dir, name) {
+function findBinary(dir, name) {
   const stack = [dir]
   while (stack.length) {
     const cur = stack.pop()
@@ -102,23 +102,23 @@ function findBinary (dir, name) {
   return null
 }
 
-function verifyBinary (path) {
+function verifyBinary(path) {
   const r = spawnSync(path, ['-version'], { encoding: 'utf8' })
   if (r.status !== 0) throw new Error(`Sanity check failed: ${path} -version exited ${r.status}\n${r.stderr}`)
   console.log(`[fetch-ffmpeg]   ✓ ${(r.stdout || '').split('\n')[0]}`)
 }
 
-function isHostTriple (triple) {
+function isHostTriple(triple) {
   return (
     (process.platform === 'darwin' && triple.endsWith('-apple-darwin') && (
-      (process.arch === 'arm64' && triple.startsWith('aarch64')) ||
-      (process.arch === 'x64' && triple.startsWith('x86_64'))
-    )) ||
-    (process.platform === 'win32' && triple === 'x86_64-pc-windows-msvc')
+      (process.arch === 'arm64' && triple.startsWith('aarch64'))
+      || (process.arch === 'x64' && triple.startsWith('x86_64'))
+    ))
+    || (process.platform === 'win32' && triple === 'x86_64-pc-windows-msvc')
   )
 }
 
-async function downloadAndExtract (url, work) {
+async function downloadAndExtract(url, work) {
   mkdirSync(work, { recursive: true })
   const archive = join(work, 'archive.zip')
   await download(url, archive)
@@ -126,7 +126,7 @@ async function downloadAndExtract (url, work) {
   extractZip(archive, work)
 }
 
-function placeBinary (foundPath, triple, tool, ext) {
+function placeBinary(foundPath, triple, tool, ext) {
   const dest = join(BIN_DIR, `${tool}-${triple}${ext}`)
   chmodSync(foundPath, 0o755)
   // copy+unlink instead of rename — GH Windows runners place TMP on C: and
@@ -139,7 +139,7 @@ function placeBinary (foundPath, triple, tool, ext) {
   return dest
 }
 
-async function fetchTriple (triple) {
+async function fetchTriple(triple) {
   const src = SOURCES[triple]
   if (!src) throw new Error(`No download source for triple ${triple}`)
   const ext = src.ext
@@ -148,7 +148,11 @@ async function fetchTriple (triple) {
   if (expected.every(p => existsSync(p))) {
     let allOk = true
     for (const p of expected) {
-      try { if (isHostTriple(triple)) verifyBinary(p) } catch { allOk = false }
+      try {
+        if (isHostTriple(triple)) verifyBinary(p)
+      } catch {
+        allOk = false
+      }
     }
     if (allOk) {
       console.log(`[fetch-ffmpeg] ${triple}: both binaries present — skip.`)
@@ -195,7 +199,7 @@ async function fetchTriple (triple) {
  * `ffmpeg-universal-apple-darwin` (it does NOT lipo per-arch binaries
  * automatically). After fetching both macOS arches we merge them with `lipo`.
  */
-function makeUniversalMacBinaries () {
+function makeUniversalMacBinaries() {
   if (process.platform !== 'darwin') return
   for (const tool of ['ffmpeg', 'ffprobe']) {
     const arm = join(BIN_DIR, `${tool}-aarch64-apple-darwin`)
@@ -203,7 +207,10 @@ function makeUniversalMacBinaries () {
     const out = join(BIN_DIR, `${tool}-universal-apple-darwin`)
     if (!existsSync(arm) || !existsSync(x64)) continue
     if (existsSync(out)) {
-      try { verifyBinary(out); continue } catch { /* refresh */ }
+      try {
+        verifyBinary(out)
+        continue
+      } catch { /* fall through and rebuild the merged binary */ }
     }
     const r = spawnSync('lipo', ['-create', arm, x64, '-output', out], { stdio: 'inherit' })
     if (r.status !== 0) throw new Error(`lipo failed for ${tool} (exit ${r.status})`)
@@ -212,7 +219,7 @@ function makeUniversalMacBinaries () {
   }
 }
 
-async function main () {
+async function main() {
   mkdirSync(BIN_DIR, { recursive: true })
 
   const allTargets = process.argv.includes('--all-targets')

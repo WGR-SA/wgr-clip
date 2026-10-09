@@ -24,6 +24,12 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/fonts.css', '~/assets/css/main.css'],
 
+  routeRules: {
+    '/': { prerender: true }
+  },
+
+  compatibilityDate: '2025-01-15',
+
   // Force a real static SPA output for `nuxt generate`. Without this Nuxt 4
   // emits "Redirecting..." stubs instead of index.html and the bundled
   // Tauri webview can't find the page. (Don't set this in dev — combining
@@ -32,15 +38,9 @@ export default defineNuxtConfig({
     preset: 'static'
   },
 
-  routeRules: {
-    '/': { prerender: true }
-  },
-
   vite: {
     clearScreen: false
   },
-
-  compatibilityDate: '2025-01-15',
 
   eslint: {
     config: {

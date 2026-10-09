@@ -80,7 +80,7 @@ function makeJob(id: string, input: string, output: string, preset: Preset, kind
   }
 }
 
-export function useTranscodeQueue () {
+export function useTranscodeQueue() {
   const state = useState<QueueState>('wgr-clip-queue', () => ({
     jobs: new Map(),
     videoPreset: 'source',
@@ -95,7 +95,7 @@ export function useTranscodeQueue () {
 
   const userPresets = useUserPresets()
 
-  function presetForKind (kind: MediaKind): PresetSelection {
+  function presetForKind(kind: MediaKind): PresetSelection {
     switch (kind) {
       case 'image': return state.value.imagePreset
       case 'audio': return state.value.audioPreset
@@ -171,7 +171,7 @@ export function useTranscodeQueue () {
     return { pending, active, done, error, cancelled, total, overall }
   })
 
-  function patch (id: string, mut: (j: Job) => void) {
+  function patch(id: string, mut: (j: Job) => void) {
     const cur = state.value.jobs.get(id)
     if (!cur) return
     const next = { ...cur }
@@ -181,7 +181,7 @@ export function useTranscodeQueue () {
     state.value.jobs = m
   }
 
-  async function bindListeners () {
+  async function bindListeners() {
     if (state.value.listenersBound) return
     state.value.listenersBound = true
 
@@ -238,7 +238,7 @@ export function useTranscodeQueue () {
     }
   }
 
-  async function addInputs (rawPaths: string[]) {
+  async function addInputs(rawPaths: string[]) {
     console.log('[queue] addInputs called with', rawPaths.length, 'paths', rawPaths)
     if (rawPaths.length === 0) return
 
@@ -341,15 +341,15 @@ export function useTranscodeQueue () {
     state.value.jobs = m
   }
 
-  async function cancel (id: string) {
+  async function cancel(id: string) {
     await invoke('cancel_job', { id })
   }
 
-  async function cancelAll () {
+  async function cancelAll() {
     await invoke('cancel_all')
   }
 
-  async function retry (id: string) {
+  async function retry(id: string) {
     const newId = await invoke<string>('retry_job', { id })
     const m = new Map(state.value.jobs)
     const old = m.get(id)
@@ -358,7 +358,7 @@ export function useTranscodeQueue () {
     state.value.jobs = m
   }
 
-  async function pickOutputDir () {
+  async function pickOutputDir() {
     const result = await open({ directory: true, multiple: false })
     if (typeof result === 'string') {
       state.value.outputDir = result
@@ -366,7 +366,7 @@ export function useTranscodeQueue () {
     }
   }
 
-  async function pickInputFiles () {
+  async function pickInputFiles() {
     const result = await open({
       multiple: true,
       filters: [
@@ -380,32 +380,32 @@ export function useTranscodeQueue () {
     }
   }
 
-  function setPreset (kind: MediaKind, p: PresetSelection) {
+  function setPreset(kind: MediaKind, p: PresetSelection) {
     if (kind === 'video') state.value.videoPreset = p
     else if (kind === 'image') state.value.imagePreset = p
     else if (kind === 'audio') state.value.audioPreset = p
     void saveSettings({ videoPreset: state.value.videoPreset, imagePreset: state.value.imagePreset, audioPreset: state.value.audioPreset })
   }
 
-  function patchCustom (patch: Partial<CustomParams>) {
+  function patchCustom(patch: Partial<CustomParams>) {
     state.value.custom = { ...state.value.custom, ...patch }
     void saveSettings({ custom: state.value.custom })
   }
 
-  async function copyDiagnostics (id: string) {
+  async function copyDiagnostics(id: string) {
     const diag = await invoke<unknown>('get_diagnostics', { id })
     await writeText(JSON.stringify(diag, null, 2))
   }
 
-  async function revealInFolder (path: string) {
+  async function revealInFolder(path: string) {
     await invoke('reveal_in_folder', { path })
   }
 
-  async function openLogsDir () {
+  async function openLogsDir() {
     await invoke('open_logs_dir')
   }
 
-  function clearFinished () {
+  function clearFinished() {
     const m = new Map<string, Job>()
     for (const [k, v] of state.value.jobs) {
       if (v.status.state !== 'done' && v.status.state !== 'cancelled') m.set(k, v)

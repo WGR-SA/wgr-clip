@@ -20,14 +20,14 @@ const FIT_TIMEOUT_MS = 120
 // gets clipped when fonts settle a fraction of a pixel after layout.
 const SAFETY_PAD_PX = 4
 
-export function useAutoFit (target: Ref<HTMLElement | null>) {
+export function useAutoFit(target: Ref<HTMLElement | null>) {
   let appliedOuterH = 0
   let chromeDelta = 28 // sensible macOS default until first measurement
   let timer: ReturnType<typeof setTimeout> | null = null
   let observer: ResizeObserver | null = null
   let mounted = false
 
-  function measureChromeDelta () {
+  function measureChromeDelta() {
     // Browser globals already report the right values inside a Tauri webview
     // and don't require any extra capability. Fall back to a sensible macOS
     // default if the numbers look bogus (e.g. fullscreen, headless tests).
@@ -36,7 +36,7 @@ export function useAutoFit (target: Ref<HTMLElement | null>) {
     if (Number.isFinite(d) && d >= 0 && d < 200) chromeDelta = d
   }
 
-  async function fit () {
+  async function fit() {
     if (!mounted) return
     const el = target.value
     if (!el) return
@@ -57,7 +57,7 @@ export function useAutoFit (target: Ref<HTMLElement | null>) {
     }
   }
 
-  function schedule () {
+  function schedule() {
     if (timer) clearTimeout(timer)
     timer = setTimeout(fit, FIT_TIMEOUT_MS)
   }

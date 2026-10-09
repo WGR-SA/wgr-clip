@@ -9,7 +9,7 @@ import {
  * (active or pending jobs) back to "idle" with at least one completed job.
  * Permission is requested lazily on the first transition.
  */
-export function useBatchNotification () {
+export function useBatchNotification() {
   const queue = useTranscodeQueue()
 
   let lastDoneAtIdle = 0
@@ -34,7 +34,7 @@ export function useBatchNotification () {
     }
   })
 
-  async function notify (count: number, errors: number) {
+  async function notify(count: number, errors: number) {
     try {
       let granted = await isPermissionGranted()
       if (!granted && !permissionAsked) {

@@ -38,16 +38,16 @@ const stderrText = computed(() => {
   return '(aucun détail capturé)'
 })
 
-async function copyDiag () {
+async function copyDiag() {
   await queue.copyDiagnostics(props.job.id)
 }
-async function retry () {
+async function retry() {
   await queue.retry(props.job.id)
 }
-async function revealInput () {
+async function revealInput() {
   await queue.revealInFolder(props.job.input)
 }
-async function revealOutputDir () {
+async function revealOutputDir() {
   const dir = dirname(props.job.output)
   if (dir) await queue.revealInFolder(dir)
 }

@@ -41,7 +41,7 @@ onMounted(() => {
   }, 5000)
 })
 
-async function install () {
+async function install() {
   if (!update.value) return
   installing.value = true
   error.value = null
