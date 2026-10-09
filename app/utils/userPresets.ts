@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { CustomParams, Preset, PresetSelection } from '../types/job'
+import type { CustomParams, Preset, PresetSelection } from '~/types/job'
 
 export interface VideoUserPreset {
   id: string
@@ -64,11 +64,11 @@ const userPresetSchema = z.discriminatedUnion('kind', [
     kind: z.literal('audio'),
     kbps: kbps.default(128)
   })
-]).transform((p): UserPreset => ({ ...p, id: p.id ?? slugify(p.name) }))
+])
 
 const userPresetFileSchema = z.object({
   presets: z.array(userPresetSchema).min(1)
-})
+}).transform(file => ({ presets: assignDerivedIds(file.presets) }))
 
 export function slugify(text: string): string {
   return text
@@ -78,6 +78,26 @@ export function slugify(text: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, MAX_ID_LENGTH)
+}
+
+// A name with no ASCII alphanumerics (emoji, CJK, …) slugifies to '' — fall
+// back to 'preset' and disambiguate derived ids within the same file so two
+// such presets never collide. Explicit ids are left untouched, including
+// duplicates between them (re-importing a file with the same id replaces it).
+function assignDerivedIds<T extends { id?: string, name: string }>(presets: readonly T[]): (T & { id: string })[] {
+  const used = new Set(presets.flatMap(p => p.id ? [p.id] : []))
+  return presets.map((p) => {
+    if (p.id) return { ...p, id: p.id }
+    const base = slugify(p.name) || 'preset'
+    let id = base
+    let n = 2
+    while (used.has(id)) {
+      id = `${base}-${n}`
+      n += 1
+    }
+    used.add(id)
+    return { ...p, id }
+  })
 }
 
 function formatPath(path: PropertyKey[]): string {
@@ -160,7 +180,7 @@ export function userSelection(id: string): PresetSelection {
   return `${USER_PREFIX}${id}`
 }
 
-export function userIdFromSelection(selection: string): string | null {
+export function userIdFromSelection(selection: PresetSelection): string | null {
   return selection.startsWith(USER_PREFIX) ? selection.slice(USER_PREFIX.length) : null
 }
 

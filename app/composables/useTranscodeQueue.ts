@@ -113,7 +113,7 @@ export function useTranscodeQueue () {
   // An imported preset rides on the built-in `custom` path with its own
   // params and output suffix. A selection pointing at a preset that was
   // deleted since falls back to Original and heals the persisted choice.
-  function resolveSelection (kind: MediaKind): ResolvedPreset {
+  function resolveSelection(kind: MediaKind): ResolvedPreset {
     const selection = presetForKind(kind)
     if (isBuiltinPreset(selection)) {
       return {
@@ -131,7 +131,7 @@ export function useTranscodeQueue () {
     return { preset: 'custom', custom: toCustomParams(user, state.value.custom), slug: user.id }
   }
 
-  function isAvailable (selection: PresetSelection): boolean {
+  function isAvailable(selection: PresetSelection): boolean {
     const id = userIdFromSelection(selection)
     return id === null || userPresets.byId(id) !== undefined
   }

@@ -54,6 +54,23 @@ describe('parseUserPresetFile', () => {
     expect(preset?.id).toBe('hero-ete-2026')
   })
 
+  it('falls back to a non-empty id when the name has no ASCII alphanumerics', () => {
+    const [preset] = parseOk(JSON.stringify({
+      presets: [{ kind: 'image', name: '★★★', max_width: 800 }]
+    }))
+    expect(preset?.id).toBeTruthy()
+  })
+
+  it('disambiguates derived ids so two unnameable presets never collide', () => {
+    const presets = parseOk(JSON.stringify({
+      presets: [
+        { kind: 'image', name: '★★★', max_width: 800 },
+        { kind: 'audio', name: '☆☆☆' }
+      ]
+    }))
+    expect(presets.map(p => p.id)).toEqual(['preset', 'preset-2'])
+  })
+
   it('fills quality knobs with sensible defaults when absent', () => {
     const [img, vid, aud] = parseOk(JSON.stringify({
       presets: [
