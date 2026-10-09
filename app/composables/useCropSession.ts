@@ -15,7 +15,7 @@ async function decodeSize(url: string): Promise<MediaSize> {
 
 export function useCropSession() {
   const state = useState<CropState>('wgr-clip-crop', initialCropState)
-  const queue = useTranscodeQueue()
+  const staging = useStaging()
   const toast = useToast()
 
   return createCropSession(state, {
@@ -27,7 +27,7 @@ export function useCropSession() {
     revokeUrl: url => URL.revokeObjectURL(url),
     previewSize: decodeSize,
     toast: spec => toast.add(spec),
-    addCroppedInput: queue.addCroppedInput,
+    setCrop: staging.setCrop,
     pickImages: async () => {
       const result = await openDialog({
         multiple: true,

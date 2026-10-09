@@ -1,6 +1,6 @@
 import { computed, type Ref } from 'vue'
 import type { CropRect, MediaKind, MediaSize, ToastSpec } from '~/types/job'
-import { applyRatio, initialRect, orientSourceSize } from '~/utils/cropGeometry'
+import { applyRatio, cropPixelSize, initialRect, orientSourceSize } from '~/utils/cropGeometry'
 import { icloudToast, splitIcloudStubs } from '~/utils/icloud'
 import { basename } from '~/utils/format'
 
@@ -37,7 +37,7 @@ export interface CropSessionDeps {
   revokeUrl: (url: string) => void
   previewSize: (url: string) => Promise<MediaSize>
   toast: (spec: ToastSpec) => void
-  addCroppedInput: (input: string, rect: CropRect) => Promise<void>
+  setCrop: (input: string, rect: CropRect, cropPx: MediaSize) => void
   pickImages: () => Promise<string[]>
 }
 
@@ -159,7 +159,7 @@ export function createCropSession(state: Ref<CropState>, deps: CropSessionDeps) 
     // `loading` keeps the editor mounted on its spinner meanwhile.
     state.value.current = null
     state.value.loading = true
-    await deps.addCroppedInput(c.input, c.rect)
+    deps.setCrop(c.input, c.rect, cropPixelSize(c.rect, c.sourceW, c.sourceH))
     deps.revokeUrl(c.previewUrl)
     await loadNext()
   }

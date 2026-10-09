@@ -5,6 +5,7 @@ import { editorKeyAction } from '~/utils/editorKeys'
 import { basename } from '~/utils/format'
 
 const crop = useCropSession()
+const staging = useStaging()
 const { register } = useDropTargets()
 
 const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
@@ -75,8 +76,13 @@ let unregister: (() => void) | null = null
 
 onMounted(() => {
   window.addEventListener('keydown', onKey)
-  // Images dropped on the editor join the current session.
-  unregister = register({ id: CROP_ZONE_ID, el: root, onDrop: paths => void crop.open(paths) })
+  // setCrop only writes onto a staged item, so a drop here must stage before
+  // it can be cropped — otherwise the file is silently dropped on confirm.
+  unregister = register({
+    id: CROP_ZONE_ID,
+    el: root,
+    onDrop: paths => void staging.add(paths).then(() => crop.open(paths))
+  })
 })
 
 onBeforeUnmount(() => {
