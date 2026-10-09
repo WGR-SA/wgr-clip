@@ -1,0 +1,17 @@
+{
+  "presets": [
+    {
+      "id": "cab-large",
+      "kind": "image",
+      "name": "CAB newsletter — large",
+      "max_width": 1120
+    },
+    {
+      "id": "cab-carre",
+      "kind": "image",
+      "name": "CAB newsletter — carré (expo/event)",
+      "max_width": 816,
+      "max_height": 816
+    }
+  ]
+}
