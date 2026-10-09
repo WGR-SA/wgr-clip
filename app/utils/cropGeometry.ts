@@ -144,3 +144,24 @@ export function cropPixelSize(rect: CropRect, sourceW: number, sourceH: number):
     height: Math.max(1, Math.round(rect.h * sourceH))
   }
 }
+
+function roundEven(x: number): number {
+  return Math.max(2, Math.round(x / 2) * 2)
+}
+
+// Mirrors preset.rs::fit_filter's four branches (the downscale-only fit a
+// preset applies after the crop). force_divisible_by=2 rounds to the
+// NEAREST even number, not a floor — verified against real ffmpeg output.
+export function fitInsideBox(size: MediaSize, maxW: number, maxH: number): MediaSize {
+  if (maxW === 0 && maxH === 0) return size
+  if (maxH === 0) {
+    const width = Math.min(size.width, maxW)
+    return { width, height: roundEven(width * (size.height / size.width)) }
+  }
+  if (maxW === 0) {
+    const height = Math.min(size.height, maxH)
+    return { width: roundEven(height * (size.width / size.height)), height }
+  }
+  const factor = Math.min(1, maxW / size.width, maxH / size.height)
+  return { width: roundEven(size.width * factor), height: roundEven(size.height * factor) }
+}

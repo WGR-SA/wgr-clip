@@ -6,6 +6,7 @@ import { loadSettings, saveSettings } from '~/composables/useSettingsStore'
 import { useUserPresets } from '~/composables/useUserPresets'
 import { detectKind } from '~/utils/mediaKind'
 import { startBatches, type ResolvedPreset } from '~/utils/jobStart'
+import { imageBoxFor } from '~/utils/presetBox'
 import type {
   AppInfo,
   CropRect,
@@ -109,6 +110,19 @@ export function useTranscodeQueue() {
     }
     return { preset: 'custom', custom: toCustomParams(user, state.value.custom), slug: user.id }
   }
+
+  // Read-only sibling of resolveSelection for the crop editor's live readout:
+  // it must never heal a dangling user-preset selection via setPreset, so a
+  // deleted preset resolves to (0, 0) instead — the pill heals itself at
+  // start time as it already does.
+  const imageBox = computed(() => {
+    const sel = state.value.imagePreset
+    if (isBuiltinPreset(sel)) return imageBoxFor(sel, state.value.custom)
+    const id = userIdFromSelection(sel)
+    const user = id === null ? undefined : userPresets.byId(id)
+    if (!user) return { maxW: 0, maxH: 0 }
+    return imageBoxFor('custom', toCustomParams(user, state.value.custom))
+  })
 
   function isAvailable(selection: PresetSelection): boolean {
     const id = userIdFromSelection(selection)
@@ -297,6 +311,7 @@ export function useTranscodeQueue() {
     imagePreset: computed(() => state.value.imagePreset),
     audioPreset: computed(() => state.value.audioPreset),
     custom: computed(() => state.value.custom),
+    imageBox,
     outputDir: computed(() => state.value.outputDir),
     appInfo: computed(() => state.value.appInfo),
     bindListeners,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CropRect } from '~/types/job'
-import { MIN_SIZE, applyRatio, cropPixelSize, initialRect, moveRect, orientSourceSize, resizeRect } from './cropGeometry'
+import { MIN_SIZE, applyRatio, cropPixelSize, fitInsideBox, initialRect, moveRect, orientSourceSize, resizeRect } from './cropGeometry'
 
 function pxRatio(r: CropRect, aspect: number): number {
   return (r.w * aspect) / r.h
@@ -145,5 +145,61 @@ describe('cropPixelSize', () => {
     const size = cropPixelSize({ x: 0, y: 0, w: 0.001, h: 0.001 }, 100, 100)
     expect(size.width).toBeGreaterThanOrEqual(1)
     expect(size.height).toBeGreaterThanOrEqual(1)
+  })
+})
+
+// Fixtures below are measured against the real ffmpeg sidecar (crop 1512×1008
+// out of a 4032×3024 source, then each box), not inferred from the formula —
+// see preset.rs::fit_filter for the filter they mirror.
+describe('fitInsideBox', () => {
+  it('no box (Original preset emits no scale filter): size passes through unchanged', () => {
+    expect(fitInsideBox({ width: 1512, height: 1008 }, 0, 0)).toEqual({ width: 1512, height: 1008 })
+  })
+
+  it('box bigger than the crop on both axes: never upscales', () => {
+    expect(fitInsideBox({ width: 1512, height: 1008 }, 2000, 2000)).toEqual({ width: 1512, height: 1008 })
+    expect(fitInsideBox({ width: 1512, height: 1008 }, 4000, 4000)).toEqual({ width: 1512, height: 1008 })
+  })
+
+  it('width-only box bigger than the crop: unchanged (branch for maxH === 0)', () => {
+    expect(fitInsideBox({ width: 1512, height: 1008 }, 1920, 0)).toEqual({ width: 1512, height: 1008 })
+  })
+
+  it('a crop already smaller than the box comes out unchanged', () => {
+    expect(fitInsideBox({ width: 604, height: 452 }, 800, 800)).toEqual({ width: 604, height: 452 })
+  })
+
+  it('fits inside a square box, both axes constrained', () => {
+    expect(fitInsideBox({ width: 1512, height: 1008 }, 800, 800)).toEqual({ width: 800, height: 534 })
+  })
+
+  // force_divisible_by=2 rounds to the NEAREST multiple of two, not a floor —
+  // each row scaled into an 800×800 box, verified against ffmpeg's actual output.
+  it.each([
+    [{ width: 1000, height: 667 }, { width: 800, height: 534 }],
+    [{ width: 1000, height: 669 }, { width: 800, height: 536 }],
+    [{ width: 1000, height: 665 }, { width: 800, height: 532 }],
+    [{ width: 1500, height: 1000 }, { width: 800, height: 534 }],
+    [{ width: 1600, height: 900 }, { width: 800, height: 450 }],
+    [{ width: 1000, height: 1000 }, { width: 800, height: 800 }],
+    [{ width: 900, height: 1600 }, { width: 450, height: 800 }]
+  ])('rounds %o into an 800×800 box as %o', (input, expected) => {
+    expect(fitInsideBox(input, 800, 800)).toEqual(expected)
+  })
+
+  it('width-only branch (maxH === 0): downscales by width alone, mirrors the two-axis case where width is the binding constraint', () => {
+    expect(fitInsideBox({ width: 1000, height: 667 }, 800, 0)).toEqual({ width: 800, height: 534 })
+  })
+
+  it('height-only branch (maxW === 0): downscales by height alone, mirrors the two-axis case where height is the binding constraint', () => {
+    expect(fitInsideBox({ width: 900, height: 1600 }, 0, 800)).toEqual({ width: 450, height: 800 })
+  })
+
+  it('height-only branch never upscales either', () => {
+    expect(fitInsideBox({ width: 1512, height: 1008 }, 0, 2000)).toEqual({ width: 1512, height: 1008 })
+  })
+
+  it('clamps a vanishing dimension to a minimum of 2, the way cropPixelSize clamps to 1', () => {
+    expect(fitInsideBox({ width: 1000, height: 1 }, 1, 1000)).toEqual({ width: 2, height: 2 })
   })
 })
