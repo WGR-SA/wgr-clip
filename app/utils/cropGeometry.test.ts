@@ -161,25 +161,46 @@ describe('fitInsideBox', () => {
     expect(fitInsideBox({ width: 1512, height: 1008 }, 4000, 4000)).toEqual({ width: 1512, height: 1008 })
   })
 
-  // When neither cap binds (factor === 1, nothing actually rescales),
-  // force_divisible_by=2 FLOORS both axes to even rather than rounding —
-  // a distinct rule from the binding case below it. Measured against the
-  // bundled ffmpeg 7.1.1 via the sidecar; round 1 of this feature missed
-  // this split because its fixtures all had a binding cap.
+  // With a box bigger than the source, each axis's own target equals the
+  // source itself (667, 1000, 999…): nearest-even would overshoot an odd
+  // one, so ffmpeg steps back down instead of rounding up. (Round 1 modelled
+  // this as "a cap never binds, so force_divisible_by=2 floors" — true for
+  // these rows, but wrong in general: see the odd-target box below, where
+  // the same 667 overshoots a tighter target and still steps down, with no
+  // "binding" involved at all.)
   it.each([
     [{ width: 1000, height: 667 }, { width: 1000, height: 666 }],
     [{ width: 1001, height: 667 }, { width: 1000, height: 666 }],
     [{ width: 999, height: 667 }, { width: 998, height: 666 }],
-    [{ width: 1000, height: 666 }, { width: 1000, height: 666 }] // already even: floor and round agree
-  ])('floors %o into a non-binding 2000×2000 box as %o', (input, expected) => {
+    [{ width: 1000, height: 666 }, { width: 1000, height: 666 }] // already even: nothing to step down
+  ])('steps %o down to the even target inside a 2000×2000 box, as %o', (input, expected) => {
     expect(fitInsideBox(input, 2000, 2000)).toEqual(expected)
   })
 
-  it('rounds the same odd height in opposite directions per branch (measured, ffmpeg 7.1.1)', () => {
-    // Two-axis with no binding cap trims down to even...
+  it('the same 667 rounds opposite ways depending on how much room its own target has (measured, ffmpeg 7.1.1)', () => {
+    // Target height is 667 itself (box ≥ source on both axes) — nearest-even
+    // (668) would overshoot it, so it steps down to 666.
     expect(fitInsideBox({ width: 1000, height: 667 }, 2000, 2000)).toEqual({ width: 1000, height: 666 })
-    // ...while the single-axis `-2` form rounds the derived axis to nearest.
+    // Target height is 1000 here (box is smaller, but height isn't the
+    // binding axis) — nearest-even (668) fits under 1000, so it stands.
+    expect(fitInsideBox({ width: 2000, height: 1334 }, 1000, 1000)).toEqual({ width: 1000, height: 668 })
+    // The single-axis `-2` form caps nothing on the derived axis at all (no
+    // height limit was given), so plain nearest-even applies: 668 again.
     expect(fitInsideBox({ width: 1000, height: 667 }, 2000, 0)).toEqual({ width: 1000, height: 668 })
+  })
+
+  // Odd box dimensions are reachable: CustomParamsPanel's width/height
+  // inputs have no `step`, and userPresets.ts's `dimension()` schema has no
+  // evenness constraint either. Measured against ffmpeg 7.1.1 via the
+  // sidecar — these three rows are what disproved round 1's rule (it said
+  // every box here was even, so "floor when non-binding" looked sufficient
+  // until an odd *binding* target showed nearest-even overshooting it too).
+  it.each([
+    [{ width: 1000, height: 667 }, 801, 801, { width: 800, height: 534 }],
+    [{ width: 1000, height: 667 }, 803, 803, { width: 802, height: 536 }],
+    [{ width: 1000, height: 667 }, 999, 999, { width: 998, height: 666 }]
+  ])('steps %o down to the even target inside an odd %i×%i box, as %o', (input, maxW, maxH, expected) => {
+    expect(fitInsideBox(input, maxW, maxH)).toEqual(expected)
   })
 
   it('width-only box bigger than the crop: unchanged (branch for maxH === 0)', () => {
@@ -194,10 +215,10 @@ describe('fitInsideBox', () => {
     expect(fitInsideBox({ width: 1512, height: 1008 }, 800, 800)).toEqual({ width: 800, height: 534 })
   })
 
-  // Once a cap binds on at least one axis, force_divisible_by=2 rounds to
-  // the NEAREST multiple of two instead of flooring (contrast the
-  // non-binding fixtures above) — verified against ffmpeg 7.1.1's actual
-  // output via the sidecar.
+  // None of these rows overshoot their own target (each result sits well
+  // under 800), so the step-down never triggers and nearest-even applies
+  // plainly — contrast the odd-target fixtures above, where it does.
+  // Verified against ffmpeg 7.1.1's actual output via the sidecar.
   it.each([
     [{ width: 1000, height: 667 }, { width: 800, height: 534 }],
     [{ width: 1000, height: 669 }, { width: 800, height: 536 }],
