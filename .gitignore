@@ -33,3 +33,9 @@ logs
 # Tauri signing key (never commit)
 *.key
 *.pub
+
+# Agent worktrees — each holds a full copy of the tree
+.claude/worktrees/
+
+# woff2 -> ttf intermediate written by scripts/generate-icon.mjs
+src-tauri/icons/.migra.ttf
