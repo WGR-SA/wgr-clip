@@ -8,12 +8,12 @@ Drag-drop converter for **video, image and audio** files — pour les clients qu
 
 Drop any media → wgr-clip auto-detects the kind and produces a web-friendly file:
 - **Video** → `.mp4` (H.264 + AAC, hardware-accelerated when available)
-- **Image** → `.jpg` (resized to a safe max dim, JPEG quality preset)
+- **Image** → `.jpg` (fitted inside the preset's width×height box, JPEG quality preset)
 - **Audio** → `.mp3` (LAME, universal compat)
 
 A drop **stages** files instead of converting them straight away: they land in a "Prêt à convertir" list grouped by kind, each group carrying its own preset — Original / Web / High Quality / **Personnalisé**, plus any preset **imported from a JSON file** (see [Imported presets](#imported-presets)). One button converts the batch. Nothing is encoded until you press it, so a wrong preset costs a click rather than a re-run.
 
-Multi-file batch with real-time progress, cancellable, error details with copy-diagnostics. Click the dropzone or drop folders — both work. A group whose encode fails to start stays in the list, ready to retry.
+Multi-file batch with real-time progress, cancellable, error details with copy-diagnostics. Click the dropzone or drop folders — both work. Anything that fails to start stays in the list, ready to retry.
 
 **Recadrer** : staged images can be cropped before conversion — from the group header for every image still uncropped, or per row for one of them. Free frame or 1:1 · 4:5 · 3:2 · 16:9 · 9:16 locks. The crop runs before the preset's resize; output is `<name>_crop_<preset>.jpg`.
 
@@ -42,7 +42,7 @@ Tests: `npm test` (vitest, pure TS helpers in `app/**`) and `cd src-tauri && car
 
 ## Imported presets
 
-Any preset menu ends with **Gérer les presets…**, which opens a manager to import a JSON file or delete imported presets. Imported presets are listed in the menu of their kind, persisted in the settings store, and their `id` becomes the output filename suffix (`photo_shop-800.jpg`). Re-importing a file with the same ids replaces those presets.
+Imported presets are managed from the settings panel (`[⚙]`): import a JSON file, or delete one you no longer want. Imported presets are listed in the menu of their kind, persisted in the settings store, and their `id` becomes the output filename suffix (`photo_shop-800.jpg`). Re-importing a file with the same ids replaces those presets.
 
 ```json
 {
