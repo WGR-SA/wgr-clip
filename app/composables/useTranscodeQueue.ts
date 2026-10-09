@@ -6,6 +6,7 @@ import { loadSettings, saveSettings } from '~/composables/useSettingsStore'
 import { icloudToast, splitIcloudStubs } from '~/utils/icloud'
 import { useUserPresets } from '~/composables/useUserPresets'
 import { detectKind } from '~/utils/mediaKind'
+import { startBatches, type ResolvedPreset } from '~/utils/jobStart'
 import type {
   AppInfo,
   CropRect,
@@ -17,7 +18,8 @@ import type {
   MediaKind,
   Preset,
   PresetSelection,
-  ProgressTick
+  ProgressTick,
+  StagedItem
 } from '~/types/job'
 import { isBuiltinPreset, toCustomParams, userIdFromSelection } from '~/utils/userPresets'
 
@@ -90,12 +92,6 @@ export function useTranscodeQueue() {
       case 'video':
       default: return state.value.videoPreset
     }
-  }
-
-  interface ResolvedPreset {
-    preset: Preset
-    custom: CustomParams | null
-    slug: string | null
   }
 
   // An imported preset rides on the built-in `custom` path with its own
@@ -329,6 +325,24 @@ export function useTranscodeQueue() {
     state.value.jobs = m
   }
 
+  async function startStaged(items: StagedItem[]): Promise<string[]> {
+    const m = new Map(state.value.jobs)
+    const uids = await startBatches(items, {
+      startJobs: args => invoke<string[]>('start_jobs', { args }),
+      resolveSelection,
+      outputDir: () => state.value.outputDir,
+      onJobs: (started) => {
+        for (const j of started) m.set(j.id, makeJob(j.id, j.input, '', j.preset, j.kind, j.custom, j.crop))
+      },
+      toast: spec => useToast().add(spec)
+    })
+    // One assignment after the whole batch run, not per-batch: start_jobs reads
+    // its collision set from the Rust side, so there's no correctness reason
+    // to re-render the job list after every batch.
+    state.value.jobs = m
+    return uids
+  }
+
   async function cancel(id: string) {
     await invoke('cancel_job', { id })
   }
@@ -413,6 +427,7 @@ export function useTranscodeQueue() {
     bindListeners,
     addInputs,
     addCroppedInput,
+    startStaged,
     cancel,
     cancelAll,
     retry,
